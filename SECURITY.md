@@ -1,8 +1,21 @@
-# Security & Privacy Notes
+# Security Policy
 
-- **Local-first**: No external databases or APIs are required for first iteration. All artifacts are local under `artifacts/`.
-- **PII**: Do not upload personally identifiable information. Synthetic data is provided for demos.
-- **Access**: Single-user desktop execution. Instructors run locally with their own environment.
-- **Malicious files**: If a file/URL load fails or appears suspicious, the app halts processing and logs to `artifacts/logs/runs.jsonl`.
-- **Secrets**: No API keys are used in v1. If added later, use environment variables and avoid committing secrets.
-- **Reports**: Generated files include minimal metadata. Verify target folder before sharing outside your machine.
+## 🔒 Data Security
+- Data files uploaded to the app are handled in-memory or stored temporarily in the `artifacts/` directory.  
+- No sensitive or personal user data is collected.  
+- Sample datasets provided (`sample_edges.csv`) are anonymized and safe for demonstration purposes.  
+
+## 🔑 Access Control
+- The Streamlit app runs on a public URL.  
+- All sessions are isolated per user, ensuring one user's data does not affect another's session.  
+- For private deployments, GitHub authentication or Streamlit team accounts can be enabled.  
+
+## ⚠️ Vulnerability Handling
+- If a security issue is found, please open a GitHub issue or contact the developer directly.  
+- Known risks include:  
+  - Uploading malformed CSV files (handled with error catching).  
+  - Heavy RL training (restricted to toy settings to avoid abuse).  
+
+## 📬 Contact
+Report security concerns to:  
+**Chisom “Chizzy” Atulomah** — nielatulomah28@gmail.com
