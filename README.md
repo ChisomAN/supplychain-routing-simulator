@@ -5,13 +5,13 @@ The app combines **classical algorithms (A\*)** and **reinforcement learning (DQ
 
 ---
 
-## 🌐 Live App
+## Live App
 Deployed on **Streamlit Cloud**:  
-👉 [Supply Chain Routing Simulator](https://supplychain-routing-simulator-blmmuwwpt3m6dtucvgfc9d.streamlit.app/)
+[Supply Chain Routing Simulator](https://supplychain-routing-simulator-blmmuwwpt3m6dtucvgfc9d.streamlit.app/)
 
 ---
 
-## 🚀 Features
+## Features
 - **Load Data**: Import CSV files or generate synthetic graphs for routing analysis.  
 - **Explore Data**: Visualize distributions, scatter plots, and summary statistics.  
 - **Clean Data**: Normalize columns, remove outliers, and handle missing values.  
@@ -25,7 +25,7 @@ Deployed on **Streamlit Cloud**:
 
 ---
 
-## 🛠️ Run Locally
+## Run Locally
 Clone the repo and install dependencies:
 
 ```bash
