@@ -1,20 +1,39 @@
+# RL Supply-Chain Routing Simulator
 
-Contents:
-- demo.ipynb … end-to-end load → EDA → cleaning → save artifacts → log run
-- eda_cleaning.ipynb … compact walkthrough focused on exploration/cleaning
-- model_stubs.ipynb … placeholders for A* and DQN next iteration
-- sample_edges.csv … clean sample
-- sample_edges_messy.csv … messy sample to demonstrate cleaning
-- requirements.txt … Python dependencies
-- artifacts/ … folder where cleaned outputs and logs are saved
+An interactive web-based data product for simulating and analyzing supply chain routing efficiency.  
+The app combines **classical algorithms (A\*)** and **reinforcement learning (DQN)** to model, analyze, and optimize logistics networks.
 
-How to run (locally):
-1) (Optional) Create and activate a virtual environment.
-2) Install dependencies:
-   pip install -r requirements.txt
-3) Open Jupyter and run demo.ipynb top to bottom.
-4) Outputs are written to artifacts/datasets and logs to artifacts/logs.
+---
 
-Notes:
-- This first iteration keeps modeling stubs only; baseline A* and DQN will be wired next iteration.
-- If internet is restricted during grading, use sample_edges.csv for the file path demo.
+## 🌐 Live App
+Deployed on **Streamlit Cloud**:  
+👉 [Supply Chain Routing Simulator](https://supplychain-routing-simulator-blmmuwwpt3m6dtucvgfc9d.streamlit.app/)
+
+---
+
+## 🚀 Features
+- **Load Data**: Import CSV files or generate synthetic graphs for routing analysis.  
+- **Explore Data**: Visualize distributions, scatter plots, and summary statistics.  
+- **Clean Data**: Normalize columns, remove outliers, and handle missing values.  
+- **Modeling**:  
+  - A\* baseline routing (distance, time, fuel).  
+  - Optional RL (DQN) with simplified demo environment.  
+- **Results**: KPI comparison between baseline and RL models.  
+- **Reports**: Generate downloadable reports (PDF if ReportLab available, otherwise TXT).  
+- **Pipeline**: One-click execution of the full workflow (synthetic → clean → model → report).  
+- **Help**: Embedded user guide via `HELP.md`.  
+
+---
+
+## 🛠️ Run Locally
+Clone the repo and install dependencies:
+
+```bash
+git clone https://github.com/ChisomAN/supplychain-routing-simulator.git
+cd supplychain-routing-simulator
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the app
+streamlit run app.py
