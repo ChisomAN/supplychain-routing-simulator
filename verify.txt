@@ -2,3 +2,4 @@ test verified commit
 another verify test
 verify signing works
 final verify test
+final verify test
