@@ -1,0 +1,4 @@
+# --- Help Tab Snippet (add to app.py after T7 or as a new tab) ---
+# Example: add `"Help"` to the tabs list and paste this block under `with TH:`
+with st.expander("How to use this product", expanded=False):
+    st.markdown(open("HELP.md", "r", encoding="utf-8").read())

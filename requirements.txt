@@ -1,0 +1,27 @@
+# Core
+streamlit>=1.36
+pandas>=2.2
+numpy>=1.26
+scikit-learn>=1.4
+scipy>=1.12
+pyyaml>=6.0
+requests>=2.32
+networkx>=3.2
+plotly>=5.20
+matplotlib>=3.8
+
+# Simulation & RL (optional, try/except in app.py protects if missing)
+simpy>=4.1
+gymnasium>=0.29
+stable-baselines3>=2.3
+torch>=2.2
+
+# Reports
+reportlab>=4.1
+
+# Utilities
+geopy>=2.4
+pydeck>=0.9
+
+# Testing (optional, local use)
+pytest>=8.2
