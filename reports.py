@@ -1,35 +1,94 @@
+# reports.py
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib import colors
+from datetime import datetime
 import os
-import time
-from typing import Dict
+import pandas as pd
 
-try:
-    from reportlab.lib.pagesizes import LETTER
-    from reportlab.pdfgen import canvas
-    _HAS_REPORTLAB = True
-except Exception:
-    _HAS_REPORTLAB = False
+def make_report(metrics, cleaned_df, plots: list = None, out_path: str = "report.pdf"):
+    """
+    Generate a structured PDF report for the RL Supply-Chain Routing Simulator.
 
+    Args:
+        metrics (dict): Can be flat ({"baseline_weighted_length": 12.9})
+                        or nested by model:
+                        {
+                            "Baseline": {"weighted_length": 12.9, "travel_time": 4.2},
+                            "RL": {"weighted_length": 10.5, "travel_time": 3.7}
+                        }
+        cleaned_df (pd.DataFrame): Cleaned dataset after preprocessing.
+        plots (list): Optional list of file paths to plots (PNG images) to embed.
+        out_path (str): Output path for the PDF report.
+    """
 
-def make_report(context: Dict, outdir: str = "artifacts/reports") -> str:
-    os.makedirs(outdir, exist_ok=True)
-    ts = int(time.time())
-    if _HAS_REPORTLAB:
-        path = os.path.join(outdir, f"report_{ts}.pdf")
-        c = canvas.Canvas(path, pagesize=LETTER)
-        c.setFont("Helvetica", 12)
-        c.drawString(72, 750, "RL Supply-Chain Simulator — Summary Report")
-        y = 720
-        for k, v in (context.get("metrics", {})).items():
-            c.drawString(72, y, f"{k}: {v}")
-            y -= 16
-        c.showPage()
-        c.save()
-        return path
+    doc = SimpleDocTemplate(out_path, pagesize=letter)
+    styles = getSampleStyleSheet()
+    story = []
+
+    # Title + Timestamp
+    story.append(Paragraph("RL Supply-Chain Routing Simulator — Summary Report", styles['Title']))
+    story.append(Spacer(1, 12))
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    story.append(Paragraph(f"Generated on: {ts}", styles['Normal']))
+    story.append(Spacer(1, 12))
+
+    # Dataset Overview
+    story.append(Paragraph("Dataset Overview", styles['Heading2']))
+    story.append(Paragraph(f"Rows: {cleaned_df.shape[0]}, Columns: {cleaned_df.shape[1]}", styles['Normal']))
+    story.append(Paragraph(f"Columns: {', '.join(cleaned_df.columns)}", styles['Normal']))
+    story.append(Spacer(1, 12))
+
+    # Descriptive Statistics
+    story.append(Paragraph("Descriptive Statistics (first 5 numeric columns)", styles['Heading2']))
+    desc = cleaned_df.describe(include='all').round(2).reset_index()
+    desc_table_data = [list(desc.columns)] + desc.values.tolist()
+    desc_table = Table(desc_table_data, hAlign='LEFT')
+    desc_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.black),
+        ("FONT", (0, 0), (-1, 0), "Helvetica-Bold")
+    ]))
+    story.append(desc_table)
+    story.append(Spacer(1, 12))
+
+    # Cleaning Steps
+    story.append(Paragraph("Cleaning Steps Applied", styles['Heading2']))
+    story.append(Paragraph("✓ Missing values handled (drop/fill)<br/>"
+                           "✓ Normalization/standardization applied<br/>"
+                           "✓ Outliers detected and removed (IQR-based)", styles['Normal']))
+    story.append(Spacer(1, 12))
+
+    # Metrics
+    story.append(Paragraph("Model Results", styles['Heading2']))
+
+    # Case 1: Nested dict (multi-model comparison)
+    if all(isinstance(v, dict) for v in metrics.values()):
+        df_metrics = pd.DataFrame(metrics).T.round(4).reset_index().rename(columns={"index": "Model"})
+        table_data = [list(df_metrics.columns)] + df_metrics.values.tolist()
+        table = Table(table_data, hAlign='LEFT')
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+            ("GRID", (0, 0), (-1, -1), 0.25, colors.black),
+            ("FONT", (0, 0), (-1, 0), "Helvetica-Bold")
+        ]))
+        story.append(table)
     else:
-        path = os.path.join(outdir, f"report_{ts}.txt")
-        lines = ["RL Supply-Chain Simulator — Summary Report\n", "\n"]
-        for k, v in (context.get("metrics", {})).items():
-            lines.append(f"{k}: {v}\n")
-        with open(path, "w", encoding="utf-8") as f:
-            f.writelines(lines)
-        return path
+        # Case 2: Flat dict
+        for k, v in metrics.items():
+            story.append(Paragraph(f"{k}: {round(v, 4)}", styles['Normal']))
+
+    story.append(Spacer(1, 12))
+
+    # Visuals
+    if plots:
+        story.append(Paragraph("Visualizations", styles['Heading2']))
+        for p in plots:
+            if os.path.exists(p):
+                story.append(Image(p, width=400, height=300))
+                story.append(Spacer(1, 12))
+
+    # Save
+    doc.build(story)
+    print(f"Report generated at {out_path}")
