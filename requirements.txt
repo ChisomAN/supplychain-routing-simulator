@@ -19,6 +19,7 @@ torch>=2.2
 
 # Reports
 reportlab>=4.1
+pillow>=10.3
 
 # Utilities
 geopy>=2.4
