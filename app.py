@@ -339,11 +339,14 @@ with T5:
 with T6:
     st.subheader("Report Generation")
     if st.button("Generate Report"):
-        try:
-            with st.spinner("Rendering report..."):
-                path = make_report(ctx)  # PDF if ReportLab, else TXT
-                log_run("report", {"path": path})
-            st.success(f"Report created: {path}")
+    try:
+        with st.spinner("Rendering report..."):
+            metrics = ctx.get("metrics", {})
+            cleaned_df = ctx.get("edges_clean", ctx.get("edges_df"))
+            plots = []  # optionally pass generated PNG paths if available
+            path = make_report(metrics, cleaned_df, plots=plots, out_path=os.path.join(REP_DIR, "report.pdf"))
+            log_run("report", {"path": path})
+        st.success(f"Report created: {path}")
 
             if os.path.exists(path):
                 with open(path, "rb") as fh:
@@ -372,9 +375,8 @@ with T7:
                 cleaner = Cleaner(normalize=True, iqr_mult=1.5)
                 ctx["edges_clean"] = cleaner.fit_transform(ctx["edges_df"])
                 ctx["baseline"] = run_a_star(ctx["G"], weight="distance_km")
-                ctx["metrics"] = evaluate_kpis(
-                    ctx.get("baseline"), ctx.get("rl_results"))
-                path = make_report(ctx)
+                ctx["metrics"] = evaluate_kpis(ctx.get("baseline"), ctx.get("rl_results"))
+                path = make_report(ctx["metrics"], ctx["edges_clean"], out_path=os.path.join(REP_DIR, "report.pdf"))
                 log_run("pipeline_full", {"report": path})
             st.success("Pipeline finished.")
             st.json(ctx["metrics"])
