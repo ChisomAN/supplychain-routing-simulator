@@ -9,7 +9,16 @@ import pandas as pd
 
 def make_report(ctx, plots: list = None, out_dir: str = "artifacts/reports"):
     """
-    Generate a structured PDF report from the session context.
+    Generate a structured PDF report for the RL Supply-Chain Routing Simulator.
+
+    Args:
+        ctx (dict): Streamlit session context containing:
+            - ctx["metrics"] (dict): Baseline / RL results
+            - ctx["edges_clean"] (pd.DataFrame): Cleaned dataset
+        plots (list): Optional list of file paths to plots (PNG images) to embed.
+        out_dir (str): Directory to save reports.
+    Returns:
+        str: Path to the generated PDF report.
     """
     os.makedirs(out_dir, exist_ok=True)
     ts = int(datetime.utcnow().timestamp())
@@ -19,7 +28,7 @@ def make_report(ctx, plots: list = None, out_dir: str = "artifacts/reports"):
     cleaned_df = ctx.get("edges_clean")
 
     if cleaned_df is None or cleaned_df.empty:
-        raise ValueError("No cleaned dataset found in context.")
+        raise ValueError("No cleaned dataset found in context — generate or clean data first.")
 
     doc = SimpleDocTemplate(out_path, pagesize=letter)
     styles = getSampleStyleSheet()
@@ -28,8 +37,8 @@ def make_report(ctx, plots: list = None, out_dir: str = "artifacts/reports"):
     # Title + Timestamp
     story.append(Paragraph("RL Supply-Chain Routing Simulator — Summary Report", styles['Title']))
     story.append(Spacer(1, 12))
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    story.append(Paragraph(f"Generated on: {ts}", styles['Normal']))
+    ts_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    story.append(Paragraph(f"Generated on: {ts_str}", styles['Normal']))
     story.append(Spacer(1, 12))
 
     # Dataset Overview
@@ -39,7 +48,7 @@ def make_report(ctx, plots: list = None, out_dir: str = "artifacts/reports"):
     story.append(Spacer(1, 12))
 
     # Descriptive Statistics
-    story.append(Paragraph("Descriptive Statistics (first 5 numeric columns)", styles['Heading2']))
+    story.append(Paragraph("Descriptive Statistics", styles['Heading2']))
     desc = cleaned_df.describe(include='all').round(2).reset_index()
     desc_table_data = [list(desc.columns)] + desc.values.tolist()
     desc_table = Table(desc_table_data, hAlign='LEFT')
@@ -53,16 +62,17 @@ def make_report(ctx, plots: list = None, out_dir: str = "artifacts/reports"):
 
     # Cleaning Steps
     story.append(Paragraph("Cleaning Steps Applied", styles['Heading2']))
-    story.append(Paragraph("✓ Missing values handled (drop/fill)<br/>"
-                           "✓ Normalization/standardization applied<br/>"
-                           "✓ Outliers detected and removed (IQR-based)", styles['Normal']))
+    story.append(Paragraph(
+        "✓ Missing values handled (drop/fill)<br/>"
+        "✓ Normalization/standardization applied<br/>"
+        "✓ Outliers detected and removed (IQR-based)",
+        styles['Normal']
+    ))
     story.append(Spacer(1, 12))
 
     # Metrics
     story.append(Paragraph("Model Results", styles['Heading2']))
-
-    # Case 1: Nested dict (multi-model comparison)
-    if all(isinstance(v, dict) for v in metrics.values()):
+    if metrics and all(isinstance(v, dict) for v in metrics.values()):
         df_metrics = pd.DataFrame(metrics).T.round(4).reset_index().rename(columns={"index": "Model"})
         table_data = [list(df_metrics.columns)] + df_metrics.values.tolist()
         table = Table(table_data, hAlign='LEFT')
@@ -72,10 +82,11 @@ def make_report(ctx, plots: list = None, out_dir: str = "artifacts/reports"):
             ("FONT", (0, 0), (-1, 0), "Helvetica-Bold")
         ]))
         story.append(table)
-    else:
-        # Case 2: Flat dict
+    elif metrics:
         for k, v in metrics.items():
             story.append(Paragraph(f"{k}: {round(v, 4)}", styles['Normal']))
+    else:
+        story.append(Paragraph("No metrics available.", styles['Normal']))
 
     story.append(Spacer(1, 12))
 
