@@ -9,6 +9,39 @@ from datetime import datetime
 import pandas as pd
 import streamlit as st
 import yaml
+import importlib
+
+# ---------------------------- Dependency Audit ----------------------------
+def check_dependency(module_name, pip_name=None, critical=False):
+    """
+    Try to import a module. If missing, warn (or stop if critical).
+    """
+    try:
+        importlib.import_module(module_name)
+        return True
+    except ImportError:
+        pkg = pip_name if pip_name else module_name
+        if critical:
+            st.error(f"Critical dependency `{module_name}` is missing. "
+                     f"Please install with `pip install {pkg}`. App cannot run.")
+            st.stop()
+        else:
+            st.warning(f"Optional dependency `{module_name}` not found. "
+                       f"Some features may be disabled. Install with: pip install {pkg}")
+        return False
+
+# Run checks
+REQUIRED = [
+    ("seaborn", "seaborn", False),      # optional (plots)
+    ("matplotlib", "matplotlib", True), # critical
+    ("pandas", "pandas", True),         # critical
+    ("networkx", "networkx", True),     # critical
+    ("reportlab", "reportlab", False),  # optional (PDF reports)
+    ("PIL", "pillow", False),           # optional (images in reports)
+]
+
+for mod, pkg, critical in REQUIRED:
+    check_dependency(mod, pkg, critical)
 
 # Local modules (root level)
 from data_io import load_data, load_from_url
