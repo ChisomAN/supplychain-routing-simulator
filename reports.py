@@ -7,21 +7,19 @@ from datetime import datetime
 import os
 import pandas as pd
 
-def make_report(metrics, cleaned_df, plots: list = None, out_path: str = "report.pdf"):
+def make_report(ctx, plots: list = None, out_dir: str = "artifacts/reports"):
     """
-    Generate a structured PDF report for the RL Supply-Chain Routing Simulator.
+    Generate a structured PDF report from the session context.
+    """
+    os.makedirs(out_dir, exist_ok=True)
+    ts = int(datetime.utcnow().timestamp())
+    out_path = os.path.join(out_dir, f"report_{ts}.pdf")
 
-    Args:
-        metrics (dict): Can be flat ({"baseline_weighted_length": 12.9})
-                        or nested by model:
-                        {
-                            "Baseline": {"weighted_length": 12.9, "travel_time": 4.2},
-                            "RL": {"weighted_length": 10.5, "travel_time": 3.7}
-                        }
-        cleaned_df (pd.DataFrame): Cleaned dataset after preprocessing.
-        plots (list): Optional list of file paths to plots (PNG images) to embed.
-        out_path (str): Output path for the PDF report.
-    """
+    metrics = ctx.get("metrics", {})
+    cleaned_df = ctx.get("edges_clean")
+
+    if cleaned_df is None or cleaned_df.empty:
+        raise ValueError("No cleaned dataset found in context.")
 
     doc = SimpleDocTemplate(out_path, pagesize=letter)
     styles = getSampleStyleSheet()
@@ -91,4 +89,5 @@ def make_report(metrics, cleaned_df, plots: list = None, out_path: str = "report
 
     # Save
     doc.build(story)
+    return out_path
     print(f"Report generated at {out_path}")
