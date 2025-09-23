@@ -50,16 +50,33 @@ def route_map(nodes_df):
 # --------------------------
 # KPI Bar Chart (Baseline vs RL)
 # --------------------------
-def kpi_bar_chart(metrics_dict):
+def kpi_bar_chart(metrics_dict, save_path=None):
+    """
+    Plot KPI comparison as a bar chart.
+    Handles both nested and flat metric dictionaries.
+    """
     records = []
+
     for model, kpis in metrics_dict.items():
-        for k, v in kpis.items():
-            records.append({"Model": model, "KPI": k, "Value": v})
+        if isinstance(kpis, dict):
+            # Expected nested dict of KPIs
+            for k, v in kpis.items():
+                records.append({"Model": model, "KPI": k, "Value": v})
+        else:
+            # Flat float/int — wrap as single KPI
+            records.append({"Model": model, "KPI": "score", "Value": kpis})
+
     df = pd.DataFrame(records)
 
-    fig, ax = plt.subplots(figsize=(7, 5))
-    sns.barplot(data=df, x="KPI", y="Value", hue="Model", ax=ax)
-    ax.set_title("KPI Comparison: Baseline vs RL")
-    ax.set_xlabel("Key Performance Indicator")
-    ax.set_ylabel("Value")
-    return fig
+    plt.figure(figsize=(7, 5))
+    sns.barplot(data=df, x="KPI", y="Value", hue="Model")
+    plt.title("KPI Comparison: Baseline vs RL")
+    plt.xlabel("Key Performance Indicator")
+    plt.ylabel("Value")
+
+    if save_path:
+        plt.savefig(save_path, bbox_inches="tight")
+        plt.close()
+        return None
+    else:
+        return plt.gcf()
