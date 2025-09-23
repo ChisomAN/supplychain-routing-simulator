@@ -10,6 +10,7 @@ networkx>=3.2
 plotly>=5.20
 matplotlib>=3.8
 seaborn>=0.13
+statsmodels>=0.14
 
 # Simulation & RL (optional, try/except in app.py protects if missing)
 simpy>=4.1
