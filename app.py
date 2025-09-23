@@ -396,25 +396,22 @@ with T7:
                 # Metrics
                 ctx["metrics"] = evaluate_kpis(ctx.get("baseline"), ctx.get("rl_results"))
 
-                # Generate report
-                out_path = os.path.join(REP_DIR, f"pipeline_report_{int(datetime.utcnow().timestamp())}.pdf")
-                make_report(ctx["metrics"], ctx["edges_clean"], out_path=out_path)
-
-                log_run("pipeline_full", {"report": out_path})
+                # Generate report (ctx-based)
+                path = make_report(ctx, plots=[])   # <-- only pass ctx now
+                log_run("pipeline_full", {"report": path})
 
             st.success("Pipeline finished.")
             st.json(ctx["metrics"])
 
-            if os.path.exists(out_path):
-                with open(out_path, "rb") as fh:
+            if os.path.exists(path):
+                with open(path, "rb") as fh:
                     st.download_button(
                         "Download Report",
                         data=fh.read(),
-                        file_name=os.path.basename(out_path),
+                        file_name=os.path.basename(path),
                     )
         except Exception as e:
             st.error(f"Pipeline failed: {e}")
-
 # ---------------------------- Help ----------------------------
 with TH:
     st.subheader("Help")
