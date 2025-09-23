@@ -339,14 +339,14 @@ with T5:
 with T6:
     st.subheader("Report Generation")
     if st.button("Generate Report"):
-    try:
-        with st.spinner("Rendering report..."):
-            metrics = ctx.get("metrics", {})
-            cleaned_df = ctx.get("edges_clean", ctx.get("edges_df"))
-            plots = []  # optionally pass generated PNG paths if available
-            path = make_report(metrics, cleaned_df, plots=plots, out_path=os.path.join(REP_DIR, "report.pdf"))
-            log_run("report", {"path": path})
-        st.success(f"Report created: {path}")
+        try:
+            with st.spinner("Rendering report..."):
+                metrics = ctx.get("metrics", {})
+                cleaned_df = ctx.get("edges_clean", ctx.get("edges_df"))
+                plots = []  # optionally pass generated PNG paths if available
+                path = make_report(metrics, cleaned_df, plots=plots, out_path=os.path.join(REP_DIR, "report.pdf"))
+                log_run("report", {"path": path})
+            st.success(f"Report created: {path}")
 
             if os.path.exists(path):
                 with open(path, "rb") as fh:
@@ -368,22 +368,43 @@ with T7:
     if st.button("Run Full Pipeline (Synthetic → Report)"):
         try:
             with st.spinner("Executing pipeline..."):
+                # Generate synthetic data
                 ctx["synth_params"] = {
-                    "n_nodes": 30, "edge_prob": 0.3, "speed_mph": 40, "delay_prob": 0.1}
+                    "n_nodes": 30,
+                    "edge_prob": 0.3,
+                    "speed_mph": 40,
+                    "delay_prob": 0.1,
+                }
                 ctx.update(
-                    load_data(path=None, synth_params=ctx["synth_params"], seed=ctx["seed"]))
+                    load_data(path=None, synth_params=ctx["synth_params"], seed=ctx["seed"])
+                )
+
+                # Clean data
                 cleaner = Cleaner(normalize=True, iqr_mult=1.5)
                 ctx["edges_clean"] = cleaner.fit_transform(ctx["edges_df"])
+
+                # Baseline model
                 ctx["baseline"] = run_a_star(ctx["G"], weight="distance_km")
+
+                # Metrics
                 ctx["metrics"] = evaluate_kpis(ctx.get("baseline"), ctx.get("rl_results"))
-                path = make_report(ctx["metrics"], ctx["edges_clean"], out_path=os.path.join(REP_DIR, "report.pdf"))
-                log_run("pipeline_full", {"report": path})
+
+                # Generate report
+                out_path = os.path.join(REP_DIR, f"pipeline_report_{int(datetime.utcnow().timestamp())}.pdf")
+                make_report(ctx["metrics"], ctx["edges_clean"], out_path=out_path)
+
+                log_run("pipeline_full", {"report": out_path})
+
             st.success("Pipeline finished.")
             st.json(ctx["metrics"])
-            if os.path.exists(path):
-                with open(path, "rb") as fh:
+
+            if os.path.exists(out_path):
+                with open(out_path, "rb") as fh:
                     st.download_button(
-                        "Download Report", data=fh.read(), file_name=os.path.basename(path))
+                        "Download Report",
+                        data=fh.read(),
+                        file_name=os.path.basename(out_path),
+                    )
         except Exception as e:
             st.error(f"Pipeline failed: {e}")
 
