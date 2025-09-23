@@ -332,8 +332,19 @@ with T5:
     st.subheader("Results & Comparison")
     if ctx.get("baseline") or ctx.get("rl_results"):
         ctx["metrics"] = evaluate_kpis(
-            ctx.get("baseline"), ctx.get("rl_results"))
+            ctx.get("baseline"), ctx.get("rl_results")
+        )
+
+        # Show metrics JSON for transparency
         st.json(ctx["metrics"])
+
+        # Show KPI bar chart
+        try:
+            from viz import kpi_bar_chart
+            fig = kpi_bar_chart(ctx["metrics"])
+            st.pyplot(fig, use_container_width=True)
+        except Exception as e:
+            st.warning(f"KPI chart could not be rendered: {e}")
 
 # ---------------------------- Reports ----------------------------
 with T6:
