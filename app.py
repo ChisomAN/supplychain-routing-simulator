@@ -351,8 +351,7 @@ with T6:
     if st.button("Generate Report"):
         try:
             with st.spinner("Rendering report..."):
-                plots = []  # optionally add saved plot paths later
-                path = make_report(ctx, plots=plots)  # <-- only pass ctx now
+                path = make_report(ctx, plots=[])
                 log_run("report", {"path": path})
             st.success(f"Report created: {path}")
 
@@ -397,7 +396,7 @@ with T7:
                 ctx["metrics"] = evaluate_kpis(ctx.get("baseline"), ctx.get("rl_results"))
 
                 # Generate report (ctx-based)
-                path = make_report(ctx, plots=[])   # <-- only pass ctx now
+                path = make_report(ctx, plots=[])
                 log_run("pipeline_full", {"report": path})
 
             st.success("Pipeline finished.")
