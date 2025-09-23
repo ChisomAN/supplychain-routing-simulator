@@ -46,7 +46,7 @@ for mod, pkg, critical in REQUIRED:
 # Local modules (root level)
 from data_io import load_data, load_from_url
 from cleaning import Cleaner
-from viz import hist_plot, scatter_plot, route_map
+from viz import hist_plot, scatter_plot, route_map, kpi_bar_chart
 from evaluation import evaluate_kpis
 from reports import make_report
 from pipeline import run_full_pipeline, run_step
@@ -332,17 +332,16 @@ with T5:
     st.subheader("Results & Comparison")
     if ctx.get("baseline") or ctx.get("rl_results"):
         ctx["metrics"] = evaluate_kpis(
-            ctx.get("baseline"), ctx.get("rl_results")
-        )
+            ctx.get("baseline"), ctx.get("rl_results"))
 
-        # Show metrics JSON for transparency
+        # Show raw JSON
         st.json(ctx["metrics"])
 
-        # Show KPI bar chart
+        # Try KPI bar chart
         try:
-            from viz import kpi_bar_chart
             fig = kpi_bar_chart(ctx["metrics"])
-            st.pyplot(fig, use_container_width=True)
+            if fig is not None:
+                st.pyplot(fig, use_container_width=True)
         except Exception as e:
             st.warning(f"KPI chart could not be rendered: {e}")
 
