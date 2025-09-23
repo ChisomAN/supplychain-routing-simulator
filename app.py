@@ -351,10 +351,8 @@ with T6:
     if st.button("Generate Report"):
         try:
             with st.spinner("Rendering report..."):
-                metrics = ctx.get("metrics", {})
-                cleaned_df = ctx.get("edges_clean", ctx.get("edges_df"))
-                plots = []  # optionally pass generated PNG paths if available
-                path = make_report(metrics, cleaned_df, plots=plots, out_path=os.path.join(REP_DIR, "report.pdf"))
+                plots = []  # optionally add saved plot paths later
+                path = make_report(ctx, plots=plots)  # <-- only pass ctx now
                 log_run("report", {"path": path})
             st.success(f"Report created: {path}")
 
@@ -371,7 +369,6 @@ with T6:
             data=ctx["edges_clean"].to_csv(index=False),
             file_name="cleaned.csv",
         )
-
 # ---------------------------- Pipeline ----------------------------
 with T7:
     st.subheader("Pipeline — One Click Run (Baseline)")
