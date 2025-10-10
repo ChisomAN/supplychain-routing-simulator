@@ -11,6 +11,11 @@ import streamlit as st
 import yaml
 import importlib
 
+# UX/ plotting helpers for non-technical stakeholders
+import plotly.express as px
+import plotly.graph_objects as go
+from typing import Dict, Any
+
 # ---------------------------- Dependency Audit ----------------------------
 def check_dependency(module_name, pip_name=None, critical=False):
     """
@@ -55,7 +60,96 @@ from pipeline import run_full_pipeline, run_step
 from models.baseline_a_star import run_a_star
 # RL parts (env + dqn_agent) are imported lazily later in the Model tab
 
+# ---------------------------- UX Helpers ----------------------------
+def _coerce_metrics(metrics: Dict[str, Any]) -> Dict[str, Dict[str, float]]:
+    """
+    Accepts either flat metrics or nested-by-model metrics and returns a normalized dict:
+      {"Baseline": {..}, "RL": {...}}   (missing parts allowed)
+    """
+    if not metrics:
+        return{}
+    # already nested by model?
+    if all(isinstance(v, dict) for v in metrics.values()):
+        return metrics
+    # flat -> tuck under "Baseline"
+    return {"Baseline": metrics}
 
+def compute_high_level_summary(ctx: dict) -> Dict[str, Any]:
+    """Derive executive-level KPIs from current context (safe defaults)."""
+    edges = ctx.get("edges_df")
+    clean = ctx.get("edges_clean")
+    baseline = ctx.get("baseline") or {}
+    rl = ctx.get("rl_results") or {}
+
+    rows = int(len(edges)) if edges is not None else 0
+    cols = int(edges.shape[1]) if edges is not None else 0
+    rows_clean = int(len(clean)) if clean is not None else 0
+
+    base_len = baseline.get("weighted_length")
+    rl_len = rl.get("weighted_length")
+
+    improvement = None
+    if base_len is not None and rl_len is not None and base_len > 0:
+        improvement = round(100.0 * (base_len - rl_len) / base_len, 2)
+
+    last_report = None
+    rep_dir = os.path.join("artifacts", "reports")
+    if os.path.isdir(rep_dir):
+        files = [os.path.join(rep_dir, f) for f in os.listdir(rep_dir)]
+        files = [f for f in files if os.path.isfile(f)]
+        if files:
+            last_report = max(files, key=lambda p: os.path.getmtime(p))
+
+    return {
+        "rows": rows,
+        "cols": cols,
+        "rows_clean": rows_clean,
+        "baseline_weighted_length": base_len,
+        "rl_weighted_length": rl_len,
+        "improvement_pct": improvement,
+        "last_report": last_report
+    }
+
+def executive_summary_panel(ctx: dict):
+    """Render top cards & a KPI chart for non-technical viewers."""
+    summary = compute_high_level_summary(ctx)
+
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.metric("Rows (raw)", summary["rows"])
+    with c2:
+        st.metric("Rows (cleaned)", summary["rows_clean"])
+    with c3:
+        st.metric("Columns", summary["cols"])
+    with c4:
+        delta = f'{summary["improvement_pct"]}%' if summary["improvement_pct"] is not None else "-"
+        st.metric("Efficiency Gain vs. Baseline", value="-" if delta == "-" else delta)
+
+   
+    metrics = _coerce_metrics(ctx.get("metrics", {}))
+    if metrics:
+        recs = []
+        for model, kpis in metrics.items():
+            for k, v in kpis.items():
+                if isinstance(v, (int, float)):
+                    recs.append({"Model": model, "KPI": k, "Value": v})
+
+        if recs:
+            fig = px.bar(recs, x="KPI", y="Value", color="Model", barmode="group",
+                         title="Key Performance Indicators", template="plotly_white")
+            st.plotly_chart(fig, use_container_width=True)
+
+    with st.expander("Report status"):
+        if summary["last_report"]:
+            ts = datetime.fromtimestamp(os.path.getmtime(summary["last_report"])).strftime("%Y-%m-%d %H:%M:%S")
+            st.write(f"**Latest report:** {os.path.basename(summary['last_report'])} (generated {ts})")
+            with open(summary["last_report"], "rb") as fh:
+                st.download_button("Download latest report", data=fh.read(),
+                                   file_name=os.path.basename(summary["last_report"]))
+        else:
+            st.info("No reports generated yet. Use the **Reports** or **Pipeline** tab to create one.")
+                  
+    
 # ---------------------------- App Setup ----------------------------
 ART_DIR = "artifacts"
 LOG_DIR = os.path.join(ART_DIR, "logs")
@@ -178,64 +272,117 @@ with st.sidebar:
         "Use Matplotlib for plots (optional)", value=False)
 
 # ---------------------------- Tabs ----------------------------
-tabs = ["Data", "Explore", "Clean", "Model",
+tabs = ["Overview", "Data", "Explore", "Clean", "Model",
         "Results", "Reports", "Pipeline", "Help"]
-T1, T2, T3, T4, T5, T6, T7, TH = st.tabs(tabs)
+T0, T1, T2, T3, T4, T5, T6, T7, TH = st.tabs(tabs)
+
+# ---------------------------- Overview ----------------------------
+with T0:
+    st.subheader("Executive Summary")
+    st.write(
+        "This dashboard demonstrates how AI can optimize supply-chain routes. "
+        "It compares a traditional pathfinding algorithm (A*) with an AI agent (Reinforcement Learning) "
+        "to reduce travel time and fuel use. Use the tabs to load data, explore, clean, model, and generate reports."
+    )
+    executive_summary_panel(ctx)
+
+    st.divider()
+    st.subheader("What to do next (Quick Start)")
+    cA, CB, cC = st.columns(3)
+    with cA:
+        st.markdown("**1) Load Data** \nUpload a CSV or generate synthetic data from the sidebar.")
+    with cB:
+        st.markdown("**2) Run Pipeline** \nUse the Pipeline tab for one_click end-to-end execution.")
+    with cC:
+        st.markdown("**3) Download Report** \nGo to Reports to export a PDF/TXXT summary.")
 
 # ---------------------------- Data ----------------------------
 with T1:
-    st.subheader("Data Preview")
-    if ctx.get("edges_df") is not None:
+    st.subheader("Data Preview & Quality")
+    if ctx.get("edges_df") is None:
+        st.info("Load a CSV or generate synthetic data from the **sidebar** to begin.")
+    else:
+        df = ctx["edges_df"]
+        missing_total = int(df.isna().sum().sum())
+        numeric_cnt = int(df.select_dtypes(include="numer").shape[1])
+        c1, c2, c3, c4 = st.columns(4)
+        with c1: st.metric("Rows", len(df))
+        with c2: st.metric("Columns", df.shape[1])
+        with c3: st.metriC("Numeric Columns", numeric_cnt)
+        with c4: st.metric("Missing Values", missing_total)
+    
         sch = ctx.get("schema", {"ok": True, "missing": [], "non_numeric": []})
         if not sch.get("ok", True):
-            st.warning("Schema issues detected:")
-            if sch.get("missing"):
-                st.write("Missing columns:", sch["missing"])
-            if sch.get("non_numeric"):
-                st.write("Non-numeric columns:", sch["non_numeric"])
-        st.dataframe(ctx["edges_df"].head(50), use_container_width=True)
-
-    if ctx.get("nodes_df") is not None:
-        try:
-            st.plotly_chart(
-                route_map(ctx["nodes_df"]), use_container_width=True)
-        except Exception:
-            st.info("Map preview uses Plotly. If it fails, continue with other tabs.")
+            st.warning("Schema checks found potential issues:")
+            if sch.get("missing"): st.write("• Missing columns:", sch["missing'])
+            if sch.get("non_numeric"): st.write("•Non-numeric columns:", sch["non_numeric"])
+        else:
+            st.success("Schema check: OK")
+    
+        st.markdown("**Sample (first 50 rows)**")
+        st.dataframe(df.head(50), use_container_width=True)
+    
+        if ctx.get("nodes_df") is not None:
+                try:
+                    st.plotly_chart(route_map(ctx["nodes_df"]), use_container_width=True)
+                except Exception:
+                    st.info("Map preview uses Plotly. If it fails, continue with other tabs.")
 
 # ---------------------------- Explore ----------------------------
 with T2:
     st.subheader("Exploration")
-    if ctx.get("edges_df") is not None:
-        num_cols = [c for c in ctx["edges_df"].columns if pd.api.types.is_numeric_dtype(
-            ctx["edges_df"][c])]
+    if ctx.get("edges_df") is None:
+        st.info("Load or generate data to explore.")
+    else:
+        df = ctx["edges_df"]
+        num_cols = [c for c in df.columns if pd.adi.types.is_numeric_dtypw(df[c])]
         use_mpl = bool(ctx.get("use_mpl", False))
+
+        with st.expander("Quick Insights (auto-generated summary)"):
+            if num-cols:
+              corr_text = "N/A"
+                try:
+                    corr = df[num_cols].corr(numeric_only=True).stack().reset_index()
+                    corr.columns = ["X", "Y", "r"]
+                    corr = corr[corr["X"] != corr["Y"]].sort_values('r', ascending=False)
+                    if not corr.empty:
+                        top = corr.iloc[0]
+                        corr_text = f"Strongest correlation: **{top['X']} vs {top['Y']}** (r={top['r']:.2f})."
+                except Exception:
+                    pass
+                skew_text = []
+                for c in num_cols[:3]:
+                    try:
+                        sk = df[c].skew()
+                        if abs(sk) > 1.0:
+                            skew_text.append(f"**{c}** appears highly skewed (skew=(sk:2f}).")
+                    except Exception:
+                        pass
+                st.markdown(
+                    f"- Numeric features detected: **{len(num_cols)}**  \n"
+                    f"- {corr_text}  \n"
+                    + ("- " + "  \n- "n- ".join(skew_text) if skew_text else "- No extreme skew detected in the first few numeric features.")
+                )
+            else:
+                st.write("No numeric columns detected.")
 
         if num_cols:
             col = st.selectbox("Histogram column", num_cols)
-            fig = hist_plot(ctx["edges_df"], col, use_matplotlib=use_mpl)
+            fig = hist_plot(df, col, use_matplotlib=use_mpl)
             if fig is not None:
-                if use_mpl:
-                    st.pyplot(fig, use_container_width=True)
-                else:
-                    st.plotly_chart(fig, use_container_width=True)
+                st.pyplot(fig, use_container_width=True) if use_mpl else st.plotly_chart(fig, use_container_width=True)
 
             if len(num_cols) >= 2:
                 cA, cB = st.columns(2)
-                with cA:
-                    x = st.selectbox("X", num_cols, index=0)
-                with cB:
-                    y = st.selectbox("Y", num_cols, index=1)
-
-                fig2 = scatter_plot(ctx["edges_df"], x,
-                                    y, use_matplotlib=use_mpl)
+                with cA: x = st.selectbox("X", num_cols, index=0)
+                with cB: y = st.selectbox("Y", num_cols, index=1)
+                fig2 = scatter_plot(df, x, y, use_matplotlib=use_mpl)
                 if fig2 is not None:
-                    if use_mpl:
-                        st.pyplot(fig2, use_container_width=True)
-                    else:
-                        st.plotly_chart(fig2, use_container_width=True)
+                    st.pyplot(fig2, use_container_width=True) if use_mpl else st.plotly_chart(fig2, use_container_width=True)
 
-        st.write("Summary stats:")
-        st.dataframe(ctx["edges_df"].describe().T, use_container_width=True)
+        st.markdown("**Summary statistics**")
+        st.dataframe(df.describe().T, use_container_width=True)
+        
 
 # ---------------------------- Clean ----------------------------
 with T3:
