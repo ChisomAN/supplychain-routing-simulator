@@ -387,42 +387,49 @@ with T2:
 # ---------------------------- Clean ----------------------------
 with T3:
     st.subheader("Cleaning")
-    if ctx.get("edges_df") is not None:
-        normalize = st.checkbox("Normalize numeric columns", value=True)
-        iqr_mult = st.slider("IQR multiplier (cap outliers)", 0.5, 3.0, 1.5)
-        drop_na = st.checkbox("Drop rows with missing values", value=False)
+    st.caption("These steps improve data quality and comprability before modeling.")
+    if ctx.get("edges_df") is None:
+        st.info("Load or generate data first")
+    else:
+        df = ctx["edges_df"]
+        normalize = st.checkbox("Normalize numeric columns", value=true,
+                                help="Scales numeric values so features are comparable.")
+        iqr_mult = st.slider("IQR multiplier (cap outliers)", 0.5, 3.0, 1.5,
+                             help="Caps extreme values using the interquartile range rule.")
+        drop_na = st.checbox("Drop rows with missing values", value=False,
+                             help="Removes rows containing missing values.")
 
-        if st.button("Apply Cleaning"):
-            with st.spinner("Cleaning data..."):
-                df = ctx["edges_df"].copy()
-                if drop_na:
-                    df = df.dropna()
-                cleaner = Cleaner(normalize=normalize, iqr_mult=iqr_mult)
-                df_clean = cleaner.fit_transform(df)
-                ctx["edges_clean"] = df_clean
-                ctx["cleaner"] = cleaner
-                clean_path = os.path.join(
-                    DATA_DIR, f"cleaned_{int(datetime.utcnow().timestamp())}.csv")
-                df_clean.to_csv(clean_path, index=False)
-                log_run(
-                    "clean",
-                    {
-                        "normalize": normalize,
-                        "iqr_mult": iqr_mult,
-                        "drop_na": drop_na,
-                        "out": clean_path,
-                        "rows_in": int(len(df)),
-                        "rows_out": int(len(df_clean)),
-                    },
-                )
+    if st.button("Apply Cleaning"):
+        with st.spinner("Cleaning data..."):
+            raw_rows = len(df)
+            if drop_na:
+                df = df.drop_na()
+            cleaner = Cleaner(normalize=normalize, iqr_mult=iqr_mult)
+            df_clean = cleaner.fit_transform(df)
+            ctx["edges_clean"] = df_clean
+            ctx["cleaner"] = cleaner
+            clean_path = os.path.join(DATA_DIR, f"cleaned_{int(datetime.utcnow().timestamp())}.csv")
+            df_clean.to_csv(clean_path, index=False)
+
             st.success("Cleaning complete.")
+            c1, c2, c3 = st.columns(3)
+            with c1: st.metric("Rows (before)", raw_rows)
+            with c2: st.metric("Rows (after)", len(df_clean))
+            with c3: st.metric("Rows dropped, raw_rows - len(df_clean))
+
+            st.markdown("**Preview (first 50 rows)**")
             st.dataframe(df_clean.head(50), use_container_width=True)
 
 # ---------------------------- Model ----------------------------
 with T4:
     st.subheader("Modeling")
-    st.info(
-        "Baseline A* is available. RL (DQN) is optional and imported only when used.")
+    st.info("Compare a traditional pathfinding method (A*) with an AI agent that learns (Reinforcement Learning).")
+    st.markdown("**Model Cards**")
+    col_m1, col_m2 = st.columns(2)
+    with col_m1:
+        st.markdown("**⏱️ A* Pathfinding** \nFinds shortest paths using a proven heuristic. Transparent and fast.")
+    with col_m2:
+        st.markdown("**🧠 Deep Q-Network (RL)** \nLearns routing decisions from experience. Adaptive and data-driven.")
 
     if ctx.get("G") is not None:
         weight = st.selectbox("Edge weight (A*)",
