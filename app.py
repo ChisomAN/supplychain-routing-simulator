@@ -483,25 +483,50 @@ with T4:
 
 # ---------------------------- Results ----------------------------
 with T5:
-    st.subheader("Results & Comparison")
-    if ctx.get("baseline") or ctx.get("rl_results"):
-        ctx["metrics"] = evaluate_kpis(
-            ctx.get("baseline"), ctx.get("rl_results"))
+    metrics = _coerce_metrics(ctx.get("metrics", {}))
+    if not metrics:
+        st.info("Run a model (A* and/or RL) to view results.")
+    else:
+        # headline KPIs
+        base = metrics.get("Baseline", {})
+        rl = metrics.get("RL", {})
 
-        # Show raw JSON
-        st.json(ctx["metrics"])
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.metric("Baseline weighted Length", f"{base.get('weighted_length', '-')}")
+        with c2:
+            st.metric("RL Weighted Length", f"{rl.get('weighted_length', '-')}")
+        with c3:
+            b = base.get("weighted_length"); r = rl.get("weighted_length")
+            if isinstance(b, (int, float)) and isinstance(r, (int,float)) and b > 0:
+                st.metric("Efficiency Gain", f"{round(100*(b-r)/b,2)}%")
+            else:
+                st.metric("Efficiency Gain", "-")
 
-        # Try KPI bar chart
+        # KPI comparison bar chart
         try:
-            fig = kpi_bar_chart(ctx["metrics"])
+            # prefer your viz.kpi_bar_chart if it returns a Matplotlib fig
+            fig = kpi_bar_chart(metrics)
             if fig is not None:
                 st.pyplot(fig, use_container_width=True)
-        except Exception as e:
-            st.warning(f"KPI chart could not be rendered: {e}")
+        except Exception:
+            # fallback to Plotly if needed
+            recs = []
+            for model, kpis in metrics.items():
+                for k, v in kpis.items():
+                    if isinstance(v, (int, float)):
+                        recs.append({"Model": model, "KPI": k, "Value": v})
+            if recs:
+                fig = px.bar(recs, x="KPI", y="Value", color="Model", barmode="group", template="plotly_white")
+                st.plotly_chart(fig, use_container_width=True)
+
+        with st.expander("Raw results (JSON)"):
+            st.json(metrics)
 
 # ---------------------------- Reports ----------------------------
 with T6:
     st.subheader("Report Generation")
+    st.caption("Create a timestamped PDF/TXT report with dataset details, cleaning steps, model KPIs, and reproduciblity metadata.")
     if st.button("Generate Report"):
         try:
             with st.spinner("Rendering report..."):
@@ -511,8 +536,7 @@ with T6:
 
             if os.path.exists(path):
                 with open(path, "rb") as fh:
-                    st.download_button(
-                        "Download Report", data=fh.read(), file_name=os.path.basename(path))
+                    st.download_button("Download Report", data=fh.read(), file_name=os.path.basemname(path))
         except Exception as e:
             st.error(f"Report generation failed: {e}")
 
@@ -522,61 +546,57 @@ with T6:
             data=ctx["edges_clean"].to_csv(index=False),
             file_name="cleaned.csv",
         )
+
 # ---------------------------- Pipeline ----------------------------
 with T7:
-    st.subheader("Pipeline — One Click Run (Baseline)")
+    st.subheader("Pipeline - One Click Run (Baseline)")
+    st.caption("Generates synthetic data → cleans → runs A* → evaluates KPIs → produces a report.")
     if st.button("Run Full Pipeline (Synthetic → Report)"):
         try:
+            step = st.empty()
             with st.spinner("Executing pipeline..."):
-                # Generate synthetic data
-                ctx["synth_params"] = {
-                    "n_nodes": 30,
-                    "edge_prob": 0.3,
-                    "speed_mph": 40,
-                    "delay_prob": 0.1,
-                }
-                ctx.update(
-                    load_data(path=None, synth_params=ctx["synth_params"], seed=ctx["seed"])
-                )
+                step.markdown("**Step 1/5:** Generating synthetic data...")
+                ctx["synth_params"] = {"n_nodes": 30, "edge_prob": 0.3, "speed_mph": 40, "delay_prob": 0.1}
+                ctx.update(load_data(path=None, synth_params=ctx["synth_params"], seed=ctx["seed"]))
 
-                # Clean data
+                step.markdown("**Step 2/5:** Cleaning data...")
                 cleaner = Cleaner(normalize=True, iqr_mult=1.5)
                 ctx["edges_clean"] = cleaner.fit_transform(ctx["edges_df"])
 
-                # Baseline model
+                step.markdown("**Step 3/5:** Running baseline model (A*)...")
                 ctx["baseline"] = run_a_star(ctx["G"], weight="distance_km")
 
-                # Metrics
+                step.markdown("**Step 4/5:** Evaluating KPIs...")
                 ctx["metrics"] = evaluate_kpis(ctx.get("baseline"), ctx.get("rl_results"))
 
-                # Generate report (ctx-based)
+                step.markdown("**Step 5/5:** Generating report...")
                 path = make_report(ctx, plots=[])
                 log_run("pipeline_full", {"report": path})
 
-            st.success("Pipeline finished.")
-            st.json(ctx["metrics"])
+            step.markdown("✅ ** Pipeline finished.**")
+            st.json(ctx["metrics'])
 
             if os.path.exists(path):
-                with open(path, "rb") as fh:
-                    st.download_button(
-                        "Download Report",
-                        data=fh.read(),
-                        file_name=os.path.basename(path),
-                    )
+                    with open(path, "rb") as fh:
+                        st.download_button("Download Report", data=fh.read(), file_name=os.path.basename(path))
         except Exception as e:
-            st.error(f"Pipeline failed: {e}")
+                    st.error(f"Pipeline failed: {e}")
+    
 # ---------------------------- Help ----------------------------
 with TH:
     st.subheader("Help")
-    st.markdown(
-        """
-        This section renders **HELP.md** so end users can read guidance inside the app.
-        If the file isn't found, a short notice is displayed.
-        """,
-        help="Place HELP.md in the same folder as app.py."
-    )
-    help_text = _safe_read(
-        "HELP.md",
-        default_text="HELP.md not found. Please include HELP.md next to app.py."
-    )
+    st.markdown("**Quick Start (non-technical)**")
+    st.markdown("1) Use the **Overview** to understand what the app does.  \n
+                "2) Load data from the **sidebar**.  \n
+                "3) Click **Pipeline** to run everything.  \n
+                "4) Get your **Report** in PDF/TXT.")
+
+    with st.expander("FAQ"):
+            st.markdown("**Can I use my own data?** Yes - upload a CSV with the required columns shown on the Data tab.")
+            st.markdown("**What is 'weighted length'?** A composite cost for routing that balancs distance/time/fuel.")
+            st.markdown("**Is it reproducible?** Yes - synthetic generation logs parameters and seeds for replication.")
+
+    st.markdown("---")
+    st.markdown("**Full Guide (from HELP.md)**")
+    help_text = _safe_read("HELP.md", default_text="HELP.md not found. Please include HELP.d]md next to app.py.")
     st.markdown(help_text)
