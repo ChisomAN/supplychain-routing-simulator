@@ -288,7 +288,7 @@ with T0:
 
     st.divider()
     st.subheader("What to do next (Quick Start)")
-    cA, CB, cC = st.columns(3)
+    cA, cB, cC = st.columns(3)
     with cA:
         st.markdown("**1) Load Data** \nUpload a CSV or generate synthetic data from the sidebar.")
     with cB:
