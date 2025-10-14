@@ -361,7 +361,7 @@ with T2:
                 st.markdown(
                     f"- Numeric features detected: **{len(num_cols)}**  \n"
                     f"- {corr_text}  \n"
-                    + ("- " + "  \n- "n- ".join(skew_text) if skew_text else "- No extreme skew detected in the first few numeric features.")
+                    + ("- " + "  n- ".join(skew_text) if skew_text else "- No extreme skew detected in the first few numeric features.")
                 )
             else:
                 st.write("No numeric columns detected.")
