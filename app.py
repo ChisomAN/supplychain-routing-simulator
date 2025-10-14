@@ -415,7 +415,7 @@ with T3:
             c1, c2, c3 = st.columns(3)
             with c1: st.metric("Rows (before)", raw_rows)
             with c2: st.metric("Rows (after)", len(df_clean))
-            with c3: st.metric("Rows dropped, raw_rows - len(df_clean))
+            with c3: st.metric("Rows dropped", raw_rows - len(df_clean))
 
             st.markdown("**Preview (first 50 rows)**")
             st.dataframe(df_clean.head(50), use_container_width=True)
