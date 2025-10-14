@@ -396,8 +396,8 @@ with T3:
                                 help="Scales numeric values so features are comparable.")
         iqr_mult = st.slider("IQR multiplier (cap outliers)", 0.5, 3.0, 1.5,
                              help="Caps extreme values using the interquartile range rule.")
-        drop_na = st.checbox("Drop rows with missing values", value=False,
-                             help="Removes rows containing missing values.")
+        drop_na = st.checkbox("Drop rows with missing values", value=False,
+                              help="Removes rows containing missing values.")
 
     if st.button("Apply Cleaning"):
         with st.spinner("Cleaning data..."):
