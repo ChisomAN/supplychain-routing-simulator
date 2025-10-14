@@ -355,7 +355,7 @@ with T2:
                     try:
                         sk = df[c].skew()
                         if abs(sk) > 1.0:
-                            skew_text.append(f"**{c}** appears highly skewed (skew=(sk:2f}).")
+                            skew_text.append(f"**{c}** appears highly skewed (skew={sk:2f}).")
                     except Exception:
                         pass
                 st.markdown(
