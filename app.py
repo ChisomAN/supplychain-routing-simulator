@@ -335,7 +335,7 @@ with T2:
         st.info("Load or generate data to explore.")
     else:
         df = ctx["edges_df"]
-        num_cols = [c for c in df.columns if pd.adi.types.is_numeric_dtypw(df[c])]
+        num_cols = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
         use_mpl = bool(ctx.get("use_mpl", False))
 
         with st.expander("Quick Insights (auto-generated summary)"):
