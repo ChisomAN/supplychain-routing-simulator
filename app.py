@@ -586,9 +586,9 @@ with T7:
 with TH:
     st.subheader("Help")
     st.markdown("**Quick Start (non-technical)**")
-    st.markdown("1) Use the **Overview** to understand what the app does.  \n
-                "2) Load data from the **sidebar**.  \n
-                "3) Click **Pipeline** to run everything.  \n
+    st.markdown("1) Use the **Overview** to understand what the app does.  \n"
+                "2) Load data from the **sidebar**.  \n"
+                "3) Click **Pipeline** to run everything.  \n"
                 "4) Get your **Report** in PDF/TXT.")
 
     with st.expander("FAQ"):
