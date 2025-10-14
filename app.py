@@ -340,7 +340,7 @@ with T2:
 
         with st.expander("Quick Insights (auto-generated summary)"):
             if num-cols:
-              corr_text = "N/A"
+                corr_text = "N/A"
                 try:
                     corr = df[num_cols].corr(numeric_only=True).stack().reset_index()
                     corr.columns = ["X", "Y", "r"]
