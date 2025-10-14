@@ -304,7 +304,7 @@ with T1:
     else:
         df = ctx["edges_df"]
         missing_total = int(df.isna().sum().sum())
-        numeric_cnt = int(df.select_dtypes(include="numer").shape[1])
+        numeric_cnt = int(df.select_dtypes(include="number").shape[1])
         c1, c2, c3, c4 = st.columns(4)
         with c1: st.metric("Rows", len(df))
         with c2: st.metric("Columns", df.shape[1])
