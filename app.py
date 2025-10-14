@@ -308,7 +308,7 @@ with T1:
         c1, c2, c3, c4 = st.columns(4)
         with c1: st.metric("Rows", len(df))
         with c2: st.metric("Columns", df.shape[1])
-        with c3: st.metriC("Numeric Columns", numeric_cnt)
+        with c3: st.metric("Numeric Columns", numeric_cnt)
         with c4: st.metric("Missing Values", missing_total)
     
         sch = ctx.get("schema", {"ok": True, "missing": [], "non_numeric": []})
