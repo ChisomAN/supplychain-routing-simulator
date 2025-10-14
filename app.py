@@ -339,7 +339,7 @@ with T2:
         use_mpl = bool(ctx.get("use_mpl", False))
 
         with st.expander("Quick Insights (auto-generated summary)"):
-            if num-cols:
+            if num_cols:
                 corr_text = "N/A"
                 try:
                     corr = df[num_cols].corr(numeric_only=True).stack().reset_index()
