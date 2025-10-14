@@ -314,7 +314,7 @@ with T1:
         sch = ctx.get("schema", {"ok": True, "missing": [], "non_numeric": []})
         if not sch.get("ok", True):
             st.warning("Schema checks found potential issues:")
-            if sch.get("missing"): st.write("• Missing columns:", sch["missing'])
+            if sch.get("missing"): st.write("• Missing columns:", sch["missing"])
             if sch.get("non_numeric"): st.write("•Non-numeric columns:", sch["non_numeric"])
         else:
             st.success("Schema check: OK")
