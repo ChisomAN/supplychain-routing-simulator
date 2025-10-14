@@ -574,7 +574,7 @@ with T7:
                 log_run("pipeline_full", {"report": path})
 
             step.markdown("✅ ** Pipeline finished.**")
-            st.json(ctx["metrics'])
+            st.json(ctx["metrics"])
 
             if os.path.exists(path):
                     with open(path, "rb") as fh:
