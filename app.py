@@ -403,7 +403,7 @@ with T3:
         with st.spinner("Cleaning data..."):
             raw_rows = len(df)
             if drop_na:
-                df = df.drop_na()
+                df = df.dropna()
             cleaner = Cleaner(normalize=normalize, iqr_mult=iqr_mult)
             df_clean = cleaner.fit_transform(df)
             ctx["edges_clean"] = df_clean
