@@ -392,7 +392,7 @@ with T3:
         st.info("Load or generate data first")
     else:
         df = ctx["edges_df"]
-        normalize = st.checkbox("Normalize numeric columns", value=true,
+        normalize = st.checkbox("Normalize numeric columns", value=True,
                                 help="Scales numeric values so features are comparable.")
         iqr_mult = st.slider("IQR multiplier (cap outliers)", 0.5, 3.0, 1.5,
                              help="Caps extreme values using the interquartile range rule.")
