@@ -493,12 +493,12 @@ with T5:
 
         c1, c2, c3 = st.columns(3)
         with c1:
-            st.metric("Baseline weighted Length", f"{base.get('weighted_length', '-')}")
+            st.metric("Baseline Weighted Length", f"{base.get('weighted_length', '-')}")
         with c2:
             st.metric("RL Weighted Length", f"{rl.get('weighted_length', '-')}")
         with c3:
             b = base.get("weighted_length"); r = rl.get("weighted_length")
-            if isinstance(b, (int, float)) and isinstance(r, (int,float)) and b > 0:
+            if isinstance(b, (int,float)) and isinstance(r, (int,float)) and b > 0:
                 st.metric("Efficiency Gain", f"{round(100*(b-r)/b,2)}%")
             else:
                 st.metric("Efficiency Gain", "-")
@@ -536,7 +536,7 @@ with T6:
 
             if os.path.exists(path):
                 with open(path, "rb") as fh:
-                    st.download_button("Download Report", data=fh.read(), file_name=os.path.basemname(path))
+                    st.download_button("Download Report", data=fh.read(), file_name=os.path.basename(path))
         except Exception as e:
             st.error(f"Report generation failed: {e}")
 
