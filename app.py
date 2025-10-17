@@ -483,45 +483,68 @@ with T4:
 
 # ---------------------------- Results ----------------------------
 with T5:
+    st.subheader("Results & Comparison")
+
+    # If a model has run but metrics aren't cached, compute them now
+    baseline = ctx.get("baseline")
+    rl = ctx.get("rl_results")
+    if (baseline or rl) and not ctx.get("metrics"):
+        try:
+            ctx["metrics"] = evaluate_kpis(baseline, rl)
+        except Exception as e:
+            st.error(f"Could not compute metrics: {e}")
+
+    # Optional manual recompute
+    cols_re = st.columns([1, 6])
+    with cols_re[0]:
+        if st.button("Recompute metrics"):
+            try:
+                ctx["metrics"] = evaluate_kpis(ctx.get("baseline"), ctx.get("rl_results"))
+                st.success("Metrics updated.")
+            except Exception as e:
+                st.error(f"Recompute failed: {e}")
+
     metrics = _coerce_metrics(ctx.get("metrics", {}))
     if not metrics:
         st.info("Run a model (A* and/or RL) to view results.")
     else:
         # headline KPIs
         base = metrics.get("Baseline", {})
-        rl = metrics.get("RL", {})
+        rl_m = metrics.get("RL", {})
 
         c1, c2, c3 = st.columns(3)
         with c1:
             st.metric("Baseline Weighted Length", f"{base.get('weighted_length', '-')}")
         with c2:
-            st.metric("RL Weighted Length", f"{rl.get('weighted_length', '-')}")
+            st.metric("RL Weighted Length", f"{rl_m.get('weighted_length', '-')}")
         with c3:
-            b = base.get("weighted_length"); r = rl.get("weighted_length")
-            if isinstance(b, (int,float)) and isinstance(r, (int,float)) and b > 0:
-                st.metric("Efficiency Gain", f"{round(100*(b-r)/b,2)}%")
+            b = base.get("weighted_length"); r = rl_m.get("weighted_length")
+            if isinstance(b, (int, float)) and isinstance(r, (int, float)) and b > 0:
+                st.metric("Efficiency Gain", f"{round(100*(b-r)/b, 2)}%")
             else:
                 st.metric("Efficiency Gain", "-")
 
-        # KPI comparison bar chart
-        try:
-            # prefer your viz.kpi_bar_chart if it returns a Matplotlib fig
-            fig = kpi_bar_chart(metrics)
-            if fig is not None:
-                st.pyplot(fig, use_container_width=True)
-        except Exception:
-            # fallback to Plotly if needed
-            recs = []
-            for model, kpis in metrics.items():
-                for k, v in kpis.items():
-                    if isinstance(v, (int, float)):
-                        recs.append({"Model": model, "KPI": k, "Value": v})
-            if recs:
-                fig = px.bar(recs, x="KPI", y="Value", color="Model", barmode="group", template="plotly_white")
-                st.plotly_chart(fig, use_container_width=True)
+    # KPI comparison chart
+    try:
+        fig = kpi_bar_chart(metrics)  # your Matplotlib-based helper
+        if fig is not None:
+            st.pyplot(figm use_container_width=True)
+    except Exception:
+        # Plotly fallback
+        records = []
+        for model, kpis in metrics.items():
+            for k, v in kpis.items():
+                if isinstance(v, (int, float)):
+                    records.append("Model": model, "KPI": k, "Value": v})
+        if records:
+            import plotly.express as px
+            fig = px.bar(records, x="KPI", y="Value", color="Model",
+                         barmode="group", template="plotly_white",
+                         title="Key Perfomance Indicators")
+            st.plotly_chart(fig, use_container_width=True)
 
-        with st.expander("Raw results (JSON)"):
-            st.json(metrics)
+    with st.expander("Raw results (JSON)"):
+        st.json(metrics)
 
 # ---------------------------- Reports ----------------------------
 with T6:
