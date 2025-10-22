@@ -528,14 +528,14 @@ with T5:
     try:
         fig = kpi_bar_chart(metrics)  # your Matplotlib-based helper
         if fig is not None:
-            st.pyplot(figm use_container_width=True)
+            st.pyplot(fig, use_container_width=True)
     except Exception:
         # Plotly fallback
         records = []
         for model, kpis in metrics.items():
             for k, v in kpis.items():
                 if isinstance(v, (int, float)):
-                    records.append("Model": model, "KPI": k, "Value": v})
+                    records.append({"Model": model, "KPI": k, "Value": v})
         if records:
             import plotly.express as px
             fig = px.bar(records, x="KPI", y="Value", color="Model",
