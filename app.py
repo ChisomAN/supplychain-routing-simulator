@@ -443,7 +443,8 @@ with T4:
 
         # RL controls (lazy import)
         tt = st.number_input("DQN total_timesteps (demo)",
-                             value=200)  # keep small for cloud
+                             value=200, step=100, min_value=100)  # keep small for cloud
+        eval_eps = st.number_input("Eval episodes", value=10, step=5, min_value=1)
         colA, colB = st.columns(2)
 
         with colA:
@@ -472,11 +473,15 @@ with T4:
                     if not ctx.get("rl_model_path"):
                         st.warning("Train a model first.")
                     else:
-                        env = RoutingEnv(ctx["G"])
+                        eval_env = RoutingEnv(ctx["G"])
                         with st.spinner("Running inference..."):
-                            ctx["rl_results"] = infer_dqn(
-                                ctx["rl_model_path"], env)
-                            log_run("infer_dqn", ctx["rl_results"])
+                            res = infer_dqn(ctx["rl_model_path"], eval_env, episodes=int(eval_eps))
+                        # Normalize to what Results tab expects
+                        ctx["rl_results"] = {
+                            "episodes": int(eval_eps),
+                            "rl_mean_reward": float(res.get("mean_reward", 0.0)),
+                        }
+                        log_run("infer_dqn", ctx["rl_results"])
                         st.write(ctx["rl_results"])
                 except Exception as e:
                     st.error(f"RL inference unavailable: {e}")
