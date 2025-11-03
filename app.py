@@ -181,6 +181,94 @@ for d in (ART_DIR, LOG_DIR, DATA_DIR, REP_DIR):
     os.makedirs(d, exist_ok=True)
 
 st.set_page_config(page_title="RL Supply-Chain Simulator", layout="wide")
+
+st.markdown("""
+<style>
+/* content width + spacing */
+.block-container {padding-top:1rem; padding-bottom:3rem; max-width: 1200px;}
+/* metric chips */
+[data-testid="stMetric"] {
+  background:#fff;border:1px solid #eef2f7;border-radius:12px;padding:12px;margin-bottom:8px;
+}
+/* headings */
+h2, .stSubheader {margin-top:0.2rem; margin-bottom:0.4rem;}
+/* expander header weight */
+.streamlit-expanderHeader {font-weight:600;}
+/* nicer buttons */
+.stButton>button {border-radius:10px;}
+/* top header bar */
+.app-header {display:flex;align-items:center;justify-content:space-between;
+             padding:6px 0 12px 0;border-bottom:1px solid #e5e7eb;margin-bottom:8px;}
+.app-title {display:flex;gap:10px;align-items:center;font-weight:700;font-size:1.05rem;}
+.app-title img {height:26px;width:26px;border-radius:6px;}
+.app-actions {display:flex;gap:8px;}
+</style>
+""", unsafe_allow_html=True)
+
+# --- Top header bar with logo + quick actions ---
+logo_url = "https://raw.githubusercontent.com/streamlit/brand/master/logos/mark/streamlit-mark-color.png"
+st.markdown(
+    f"""
+    <div class="app-header">
+        <div class="app-title">
+            <img src="{logo_url}" alt="logo">
+            <span>RL Supply-Chain Routing Simulator</span>
+        </div>
+        <div class="app-actions"></div>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+# --- Quick action buttons ---
+qc1, qc2, qc3 = st.columns([1, 1, 1])
+run_quick_pipeline = qc1.button("▶ Run Pipeline", use_container_width=True, key="quick_pipeline_btn")
+trigger_upload = qc2.button("⬆ Load CSV", use_container_width=True, key="quick_csv_btn")
+gen_quick_report = qc3.button("📄 Generate Report", use_container_width=True, key="quick_report_btn")
+
+# --- Wire quick actions to existing logic ---
+if run_quick_pipeline:
+    with st.spinner("Running quick pipeline (synthetic → clean → A* → KPIs → report)..."):
+        # Synthetic data
+        ctx["synth_params"] = {"n_nodes": 30, "edge_prob": 0.3, "speed_mph": 40, "delay_prob": 0.1}
+        ctx.update(load_data(path=None, synth_params=ctx["synth_params"], seed=ctx["seed"]))
+
+        # Clean data
+        cleaner = Cleaner(normalize=True, iqr_mult=1.5)
+        ctx["edges_clean"] = cleaner.fit_transform(ctx["edges_df"])
+
+        # Run baseline A*
+        ctx["baseline"] = run_a_star(ctx["G"], weight="distance_km")
+
+        # Compute KPIs
+        ctx["metrics"] = evaluate_kpis(ctx.get("baseline"), ctx.get("rl_results"))
+
+        # Generate report
+        quick_report_path = make_report(ctx, plots=[])
+        log_run("pipeline_full_quick", {"report": quick_report_path})
+
+    st.success("Quick pipeline completed ✅")
+
+if trigger_upload:
+    st.info("➡ Scroll to the **sidebar → Upload or URL Load** to select your CSV, then click **Load CSV File**.")
+
+if gen_quick_report:
+    try:
+        with st.spinner("Generating report from current context..."):
+            report_path = make_report(ctx, plots=[])
+            log_run("report_quick", {"path": report_path})
+        st.success(f"Report generated ✅ — {os.path.basename(report_path)}")
+
+        if os.path.exists(report_path):
+            with open(report_path, "rb") as fh:
+                st.download_button(
+                    "Download Report",
+                    data=fh.read(),
+                    file_name=os.path.basename(report_path)
+                )
+    except Exception as e:
+        st.error(f"Quick report failed: {e}")
+
 st.title("RL Supply-Chain Routing Simulator")
 
 if "ctx" not in st.session_state:
