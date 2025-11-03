@@ -74,6 +74,26 @@ def _coerce_metrics(metrics: Dict[str, Any]) -> Dict[str, Dict[str, float]]:
     # flat -> tuck under "Baseline"
     return {"Baseline": metrics}
 
+def _ensure_chartable_kpis(metrics: Dict[str, Any]) -> Dict[str, Any]:
+    """Make sure there's at least one numeric KPI per model so that chart isn't empty."""
+    if not metrics:
+        return metrics
+    out = {}
+    if all (isinstance(v, dict) for v in metrics.values()):    # nested-by-model
+        for model, kpis in metrics.items():
+            any_numeric = any(isinstance(v, (int, float)) for v in kpis.values())
+            if not any_numeric:
+                #Try a graceful alias if present
+                if "rl_mean_reward" in kpis and isinstance(kpis["rl_mean_reward"], (int, float)):
+                    out[model] = {**kpis, "mean_reward": float(kpis["rl_mean_reward"])}
+                else:
+                    out[model] = {**kpis, "_placeholder": 0.0}
+            else:
+                out[model] = kpis
+        return out
+    # flat dict (Baseline only) - keep as-is
+    return metrics
+
 def compute_high_level_summary(ctx: dict) -> Dict[str, Any]:
     """Derive executive-level KPIs from current context (safe defaults)."""
     edges = ctx.get("edges_df")
@@ -148,7 +168,9 @@ def executive_summary_panel(ctx: dict):
                                    file_name=os.path.basename(summary["last_report"]))
         else:
             st.info("No reports generated yet. Use the **Reports** or **Pipeline** tab to create one.")
-                  
+
+    if summary["rows"] == 0:
+        st.info("No data loaded yet. Use the sidebar to generate synthetic data or upload a CSV.")
     
 # ---------------------------- App Setup ----------------------------
 ART_DIR = "artifacts"
@@ -294,7 +316,7 @@ with T0:
     with cB:
         st.markdown("**2) Run Pipeline** \nUse the Pipeline tab for one_click end-to-end execution.")
     with cC:
-        st.markdown("**3) Download Report** \nGo to Reports to export a PDF/TXXT summary.")
+        st.markdown("**3) Download Report** \nGo to Reports to export a PDF/TXT summary.")
 
 # ---------------------------- Data ----------------------------
 with T1:
@@ -314,8 +336,8 @@ with T1:
         sch = ctx.get("schema", {"ok": True, "missing": [], "non_numeric": []})
         if not sch.get("ok", True):
             st.warning("Schema checks found potential issues:")
-            if sch.get("missing"): st.write("• Missing columns:", sch["missing"])
-            if sch.get("non_numeric"): st.write("•Non-numeric columns:", sch["non_numeric"])
+            if sch.get("missing"): st.write("• **Missing columns:**", sch["missing"])
+            if sch.get("non_numeric"): st.write("• **Non-numeric columns:**", sch["non_numeric"])
         else:
             st.success("Schema check: OK")
     
@@ -387,7 +409,7 @@ with T2:
 # ---------------------------- Clean ----------------------------
 with T3:
     st.subheader("Cleaning")
-    st.caption("These steps improve data quality and comprability before modeling.")
+    st.caption("These steps improve data quality and comparability before modeling.")
     if ctx.get("edges_df") is None:
         st.info("Load or generate data first")
     else:
@@ -439,6 +461,10 @@ with T4:
                 ctx["baseline"] = run_a_star(ctx["G"], weight=weight)
                 log_run("run_astar", {
                         "weight": weight, "length": ctx["baseline"]["weighted_length"]})
+                try:
+                    ctx["metrics"] = evaluate_kpis(ctx.get("baseline"), ctx.get("rl_results"))
+                except Exception as e:
+                    st.warning(f"Metrics not available yet: {e}")
             st.write(ctx["baseline"])
 
         # RL controls (lazy import)
@@ -481,6 +507,11 @@ with T4:
                             "episodes": int(eval_eps),
                             "rl_mean_reward": float(res.get("mean_reward", 0.0)),
                         }
+                        try:
+                            ctx["metrics"] = evaluate_kpis(ctx.get("baseline"), ctx.get("rl_results"))
+                            st.success("Metrics updated from RL inference.")
+                        except Exception as e:
+                            st.warning(f"Metrics update skipped: {e}")
                         log_run("infer_dqn", ctx["rl_results"])
                         st.write(ctx["rl_results"])
                 except Exception as e:
@@ -510,6 +541,8 @@ with T5:
                 st.error(f"Recompute failed: {e}")
 
     metrics = _coerce_metrics(ctx.get("metrics", {}))
+    metrics = _ensure_chartable_kpis(metrics)
+    
     if not metrics:
         st.info("Run a model (A* and/or RL) to view results.")
     else:
@@ -538,15 +571,20 @@ with T5:
         # Plotly fallback
         records = []
         for model, kpis in metrics.items():
-            for k, v in kpis.items():
-                if isinstance(v, (int, float)):
-                    records.append({"Model": model, "KPI": k, "Value": v})
+            if isinstance(kpis, dict):
+                for k, v in kpis.items():
+                    if isinstance(v, (int, float)):
+                        records.append({"Model": model, "KPI": k, "Value": float(v)})
         if records:
             import plotly.express as px
-            fig = px.bar(records, x="KPI", y="Value", color="Model",
-                         barmode="group", template="plotly_white",
-                         title="Key Perfomance Indicators")
+            fig = px.bar(
+                records, x="KPI", y="Value", color="Model",
+                barmode="group", template="plotly_white",
+                title="Key Performance Indicators"
+            )
             st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No numeric KPIs to visualize yet. Run A* and/or RL.")
 
     with st.expander("Raw results (JSON)"):
         st.json(metrics)
@@ -577,7 +615,7 @@ with T6:
 
 # ---------------------------- Pipeline ----------------------------
 with T7:
-    st.subheader("Pipeline - One Click Run (Baseline)")
+    st.subheader("Pipeline – One Click Run (Baseline)")
     st.caption("Generates synthetic data → cleans → runs A* → evaluates KPIs → produces a report.")
     if st.button("Run Full Pipeline (Synthetic → Report)"):
         try:
@@ -621,10 +659,10 @@ with TH:
 
     with st.expander("FAQ"):
             st.markdown("**Can I use my own data?** Yes - upload a CSV with the required columns shown on the Data tab.")
-            st.markdown("**What is 'weighted length'?** A composite cost for routing that balancs distance/time/fuel.")
+            st.markdown("**What is 'weighted length'?** A composite cost for routing that balances distance/time/fuel.")
             st.markdown("**Is it reproducible?** Yes - synthetic generation logs parameters and seeds for replication.")
 
     st.markdown("---")
     st.markdown("**Full Guide (from HELP.md)**")
-    help_text = _safe_read("HELP.md", default_text="HELP.md not found. Please include HELP.d]md next to app.py.")
+    help_text = _safe_read("HELP.md", default_text="HELP.md not found. Please include HELP.md next to app.py.")
     st.markdown(help_text)
