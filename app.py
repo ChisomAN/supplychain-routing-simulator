@@ -220,37 +220,39 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+has_data = ctx.get("edges_df") is not None
+
 # --- Quick action buttons ---
-qc1, qc2, qc3 = st.columns([1, 1, 1])
-run_quick_pipeline = qc1.button("▶ Run Pipeline", use_container_width=True, key="quick_pipeline_btn")
-trigger_upload = qc2.button("⬆ Load CSV", use_container_width=True, key="quick_csv_btn")
-gen_quick_report = qc3.button("📄 Generate Report", use_container_width=True, key="quick_report_btn")
+if has_data:
+    qc1, qc2 = st.columns([1, 1])
+    with qc1:
+        run_quick_pipeline = st.button(
+            "▶ Run Pipeline",
+            use_container_width=True,
+            key="quick_pipeline_btn"
+        )
+    with qc2:
+        gen_quick_report = st.button(
+            "📄 Generate Report",
+            use_container_width=True,
+            key="quick_report_btn"
+        )
+else:
+    st.info("Load or generate data from the sidebar to unlock quick actions (Pipeline & Report).")
+    run_quick_pipeline = False
+    gen_quick_report = False
 
 # --- Wire quick actions to existing logic ---
 if run_quick_pipeline:
-    with st.spinner("Running quick pipeline (synthetic → clean → A* → KPIs → report)..."):
-        # Synthetic data
-        ctx["synth_params"] = {"n_nodes": 30, "edge_prob": 0.3, "speed_mph": 40, "delay_prob": 0.1}
-        ctx.update(load_data(path=None, synth_params=ctx["synth_params"], seed=ctx["seed"]))
-
-        # Clean data
+    with st.spinner("Running quick pipeline (clean → A* → KPIs → report)..."):
+        # We assume data already exists since has_data == True
         cleaner = Cleaner(normalize=True, iqr_mult=1.5)
         ctx["edges_clean"] = cleaner.fit_transform(ctx["edges_df"])
-
-        # Run baseline A*
         ctx["baseline"] = run_a_star(ctx["G"], weight="distance_km")
-
-        # Compute KPIs
         ctx["metrics"] = evaluate_kpis(ctx.get("baseline"), ctx.get("rl_results"))
-
-        # Generate report
         quick_report_path = make_report(ctx, plots=[])
         log_run("pipeline_full_quick", {"report": quick_report_path})
-
     st.success("Quick pipeline completed ✅")
-
-if trigger_upload:
-    st.info("➡ Scroll to the **sidebar → Upload or URL Load** to select your CSV, then click **Load CSV File**.")
 
 if gen_quick_report:
     try:
@@ -258,7 +260,6 @@ if gen_quick_report:
             report_path = make_report(ctx, plots=[])
             log_run("report_quick", {"path": report_path})
         st.success(f"Report generated ✅ — {os.path.basename(report_path)}")
-
         if os.path.exists(report_path):
             with open(report_path, "rb") as fh:
                 st.download_button(
