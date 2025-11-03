@@ -245,7 +245,7 @@ else:
 # --- Wire quick actions to existing logic ---
 if run_quick_pipeline:
     with st.spinner("Running quick pipeline (clean → A* → KPIs → report)..."):
-        # We assume data already exists since has_data == True
+        # Assume data already exists since has_data == True
         cleaner = Cleaner(normalize=True, iqr_mult=1.5)
         ctx["edges_clean"] = cleaner.fit_transform(ctx["edges_df"])
         ctx["baseline"] = run_a_star(ctx["G"], weight="distance_km")
