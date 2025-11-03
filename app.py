@@ -215,12 +215,9 @@ h2, .stSubheader {margin-top:0.2rem; margin-bottom:0.4rem;}
 logo_url = "assets/logo.png"
 st.markdown(
     f"""
-    <div class="app-header">
-        <div class="app-title">
-            <img src="{logo_url}" alt="logo">
-            <span>RL Supply-Chain Routing Simulator</span>
-        </div>
-        <div class="app-actions"></div>
+    <div class="app-header" style="display:flex; align-items:center; gap:10px; margin-bottom:0.5rem;">
+        <img src="{logo_url}" alt="logo" style="height:40px;">
+        <h1 style="margin:0; font-size:1.75rem;">RL Supply-Chain Routing Simulator</h1>
     </div>
     """,
     unsafe_allow_html=True
