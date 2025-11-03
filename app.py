@@ -181,6 +181,7 @@ for d in (ART_DIR, LOG_DIR, DATA_DIR, REP_DIR):
     os.makedirs(d, exist_ok=True)
 
 st.set_page_config(page_title="RL Supply-Chain Simulator", layout="wide")
+st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
 st.title("RL Supply-Chain Routing Simulator")
 
 if "ctx" not in st.session_state:
