@@ -396,6 +396,20 @@ with T0:
     )
     executive_summary_panel(ctx)
 
+    try:
+        metrics_norm = _coerce_metrics(ctx.get("metrics", {}))
+        series = []
+        for m, kpis in metrics_norm.items():
+            vals = [v for v in kpis.values() if isinstance(v, (int, float))]
+            if vals:
+                series.append((m, sum(vals)/len(vals)))
+        if series:
+            fig_spark = go.Figure()
+            fig_spark.add_trace(go.Scatter(y=[x[1] for x in series], mode="lines+markers", name="KPI trend"))
+            fig_spark.update_layout(height=120, margin=dict(l=10,r=10,t=10,b=10), template="plotly_white", showlegend=False)
+            st.plotly_chart(fig_spark, use_container_width=True)
+    except Exception:
+        pass
     st.divider()
     st.subheader("What to do next (Quick Start)")
     cA, cB, cC = st.columns(3)
