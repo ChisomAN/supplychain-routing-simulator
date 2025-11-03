@@ -212,7 +212,7 @@ h2, .stSubheader {margin-top:0.2rem; margin-bottom:0.4rem;}
 """, unsafe_allow_html=True)
 
 # --- Top header bar with logo + quick actions ---
-logo_url = "https://raw.githubusercontent.com/streamlit/brand/master/logos/mark/streamlit-mark-color.png"
+logo_url = "assets/logo.png"
 st.markdown(
     f"""
     <div class="app-header">
