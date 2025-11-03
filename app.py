@@ -181,6 +181,11 @@ for d in (ART_DIR, LOG_DIR, DATA_DIR, REP_DIR):
     os.makedirs(d, exist_ok=True)
 
 st.set_page_config(page_title="RL Supply-Chain Simulator", layout="wide")
+st.title("RL Supply-Chain Routing Simulator")
+
+if "ctx" not in st.session_state:
+    st.session_state.ctx = {"seed": 42}
+ctx = st.session_state.ctx
 
 st.markdown("""
 <style>
@@ -269,12 +274,6 @@ if gen_quick_report:
                 )
     except Exception as e:
         st.error(f"Quick report failed: {e}")
-
-st.title("RL Supply-Chain Routing Simulator")
-
-if "ctx" not in st.session_state:
-    st.session_state.ctx = {"seed": 42}
-ctx = st.session_state.ctx
 
 # ---------------------------- Utilities ----------------------------
 
