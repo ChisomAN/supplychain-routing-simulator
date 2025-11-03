@@ -1,4 +1,4 @@
-# app.py — RL Supply-Chain Routing Simulator (Milestone 3/4)
+# app.py — RL Supply-Chain Routing Simulator
 # Streamlit UI: Data | Explore | Clean | Model | Results | Reports | Pipeline | Help
 
 # ---------------------------- Imports ----------------------------
