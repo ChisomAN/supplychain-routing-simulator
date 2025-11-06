@@ -60,6 +60,43 @@ from pipeline import run_full_pipeline, run_step
 from models.baseline_a_star import run_a_star
 # RL parts (env + dqn_agent) are imported lazily later in the Model tab
 
+from typing import Dict
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import (
+    confusion_matrix, ConfusionMatrixDisplay, roc_curve, auc,
+    precision_recall_fscore_support, accuracy_score
+)
+
+# Optional: reuse your Cleaner with safe defaults
+try:
+    from cleaning import Cleaner as _CleanerAA
+    def _clean_edges_aa(df: pd.DataFrame) -> pd.DataFrame:
+        return _CleanerAA(normalize=True, iqr_mult=1.5).fit_transform(df)
+except Exception:
+    def _clean_edges_aa(df: pd.DataFrame) -> pd.DataFrame:
+        df = df.dropna()
+        for col in ("distance_km", "travel_time_est", "fuel_rate"):
+            if col in df:
+                df[col] = df[col].clip(lower=0)
+        return df
+
+def _logistic(x: np.ndarray, temp: float = 0.08) -> np.ndarray:
+    return 1.0 / (1.0 + np.exp(-temp * x))
+
+def _evaluate_probs(y_true: np.ndarray, y_prob: np.ndarray, thr: float = 0.5) -> Dict:
+    y_pred = (y_prob >= thr).astype(int)
+    acc = accuracy_score(y_true, y_pred)
+    precision, recall, f1, _ = precision_recall_fscore_support(
+        y_true, y_pred, average="binary", zero_division=0
+    )
+    fpr, tpr, _ = roc_curve(y_true, y_prob)
+    roc_auc = auc(fpr, tpr)
+    cm = confusion_matrix(y_true, y_pred)
+    return dict(acc=acc, prec=precision, rec=recall, f1=f1,
+                fpr=fpr, tpr=tpr, auc=roc_auc, cm=cm)
+    
 # ---------------------------- UX Helpers ----------------------------
 def _coerce_metrics(metrics: Dict[str, Any]) -> Dict[str, Dict[str, float]]:
     """
@@ -378,6 +415,21 @@ with st.sidebar:
     st.subheader("Charts")
     ctx["use_mpl"] = st.checkbox(
         "Use Matplotlib for plots (optional)", value=False)
+
+# --- Advanced Analysis controls ---
+st.subheader("Advanced Analysis Controls")
+as_sla_min = st.number_input("SLA (minutes)", min_value=30, max_value=240, value=90, step=5)
+aa_use_reward_shaping = st.checkbox("Apply v1: Reward Shaping", value=True)
+aa_use_opt_tuning     = st.checkbox("Apply v2: Optimization Tuning", value=True)
+
+st.markdown("---")
+aa_data_mode = st.radio("Advanced Analysis Dataset", ["Sample CSV", "Upload CSV"], index=0, key="aa_data_mode")
+aa_uploaded = None
+if aa_uploaded = "Upload CSV":
+    aa_uploaded = st.file_uploader(
+        "Upload edges CSV for Advanced Analysis",
+        type=["csv", key="aa_uploader"
+    )
 
 # ---------------------------- Tabs ----------------------------
 tabs = ["Overview", "Data", "Explore", "Clean", "Model",
