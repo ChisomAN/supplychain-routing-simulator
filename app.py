@@ -539,7 +539,7 @@ def render_advanced_analysis_tab(
     Renders the Advanced Analysis tab (metrics, ROC, confusion matrices, EDA, refinements).
     Uses proxy probabilities unless you later swap in your real model outputs.
     """
-        # 0) Load/clean data (robust fallbacks + graceful exit)
+    # 0) Load/clean data (robust fallbacks + graceful exit)
     df_raw = None
     if df_source is not None:
         df_raw = df_source.copy()
@@ -557,23 +557,54 @@ def render_advanced_analysis_tab(
 
     df_clean = _clean_edges_aa(df_raw.copy())
 
-        # === Prefer real outputs if available ===
+    # Guards
+    if "travel_time_est" not in df_clean.columns:
+        st.error("Expected column 'travel_time_est' not found. Provide a CSV with travel_time_est.")
+        return
+    if "distance_km" not in df_clean.columns:
+        st.warning("Column 'distance_km' not found; defaulting to zeros for distance features.")
+        df_clean["distance_km"] = 0.0
+
+    # 1) Proxy labels & proxy probabilities (baseline)
+    rng = np.random.default_rng(11)
+    df_clean["sla_min"] = int(sla_min)
+    noise = rng.normal(0, 6, size=len(df_clean))
+    actual_time = df_clean["travel_time_est"].values + noise
+    y_true_arr = (actual_time <= df_clean["sla_min"].values).astype(int)
+
+    a_star_score = df_clean["sla_min"].values - df_clean["travel_time_est"].values
+    dqn0_score   = a_star_score + rng.normal(0, 5, size=len(df_clean)) + 0.08*df_clean["distance_km"].values*(-0.2)
+    a_star_prob_arr, dqn0_prob_arr = _logistic(a_star_score), _logistic(dqn0_score)
+
+    # Refinements on proxy DQN
+    tightness = np.clip((df_clean["sla_min"].values / (df_clean["travel_time_est"].values + 1e-5)), 0.5, 1.5)
+    traffic   = np.clip(df_clean["distance_km"].values / max(df_clean["distance_km"].max(), 1e-9), 0, 1)
+    dqn1_prob = dqn0_prob_arr.copy()
+    if use_reward_shaping:
+        dqn1_prob = np.clip(
+            dqn0_prob_arr + 0.06*(tightness - 1.0) + 0.05*(1.0 - traffic) + rng.normal(0, 0.01, size=len(df_clean)),
+            0, 1
+        )
+    dqn2_prob = dqn1_prob.copy()
+    if use_opt_tuning:
+        dqn2_prob = np.clip(dqn1_prob + (y_true_arr - 0.5)*0.05, 0, 1)
+
+    # 2) Prefer real outputs if available (overrides the proxy arrays)
     aa_eval = st.session_state.get("ctx", {}).get("aa_eval")
-    use_real = False
-    if aa_eval and isinstance(aa_eval, dict):
+    using_real = False
+    if isinstance(aa_eval, dict):
         y_true_real = aa_eval.get("y_true")
         a_prob_real = aa_eval.get("a_star_prob")
         d_prob_real = aa_eval.get("dqn_prob")
         if isinstance(y_true_real, np.ndarray) and isinstance(a_prob_real, np.ndarray):
-            # Valid real arrays found; use them
-            use_real = True
             y_true_arr = y_true_real
             a_star_prob_arr = a_prob_real
             dqn0_prob_arr = d_prob_real if d_prob_real is not None else None
+            using_real = True  # when real RL exists, we usually skip v1/v2
 
-    # Button to build a fresh real evaluation set (A* + DQN if available)
+    # Button row for building/clearing real sample
     st.markdown("### Real Evaluation (Optional)")
-    cols_btn = st.columns([1,1,2])
+    cols_btn = st.columns([1, 1, 2])
     with cols_btn[0]:
         if st.button("🧪 Build evaluation sample from real models", use_container_width=True):
             try:
@@ -586,71 +617,34 @@ def render_advanced_analysis_tab(
                     rng_seed=19
                 )
                 st.success(f"Collected {len(out['y_true'])} labeled samples.")
-                # refresh local references
                 aa_eval = ctx.get("aa_eval")
                 y_true_arr = aa_eval["y_true"]
                 a_star_prob_arr = aa_eval["a_star_prob"]
                 dqn0_prob_arr = aa_eval.get("dqn_prob", None)
-                use_real = True
+                using_real = True
             except Exception as e:
                 st.error(f"Could not collect real samples: {e}")
     with cols_btn[1]:
         if st.button("♻️ Clear real evaluation cache", use_container_width=True):
             st.session_state.ctx.pop("aa_eval", None)
             st.info("Cleared. The tab will fall back to proxy scores.")
-
-    # If no real arrays, fall back to proxy probabilities from the dataset
-    if not use_real:
-        y_true_arr = y_true
-        a_star_prob_arr = a_star_prob
-        dqn0_prob_arr = dqn0_prob
-    
-    # Guards
-    if "travel_time_est" not in df_clean.columns:
-        st.error("Expected column 'travel_time_est' not found. Provide a CSV with travel_time_est.")
-        return
-    if "distance_km" not in df_clean.columns:
-        st.warning("Column 'distance_km' not found; defaulting to zeros for distance features.")
-        df_clean["distance_km"] = 0.0
-
-    # 1) Labels from SLA vs travel_time_est
-    rng = np.random.default_rng(11)
-    df_clean["sla_min"] = int(sla_min)
-    noise = rng.normal(0, 6, size=len(df_clean))
-    actual_time = df_clean["travel_time_est"].values + noise
-    y_true_arr = (actual_time <= df_clean["sla_min"].values).astype(int)
-
-    # 2) Baseline & RL-proxy probabilities
-    a_star_score = df_clean["sla_min"].values - df_clean["travel_time_est"].values
-    dqn0_score   = a_star_score + rng.normal(0, 5, size=len(df_clean)) + 0.08*df_clean["distance_km"].values*(-0.2)
-    a_star_prob_arr, dqn0_prob_arr = _logistic(a_star_score), _logistic(dqn0_score)
-
-    # Refinements
-    tightness = np.clip((df_clean["sla_min"].values / (df_clean["travel_time_est"].values + 1e-5)), 0.5, 1.5)
-    traffic   = np.clip(df_clean["distance_km"].values / max(df_clean["distance_km"].max(), 1e-9), 0, 1)
-
-    dqn1_prob = dqn0_prob_arr.copy()
-    if use_reward_shaping:
-        dqn1_prob = np.clip(
-            dqn0_prob_arr + 0.06*(tightness - 1.0) + 0.05*(1.0 - traffic) + rng.normal(0, 0.01, size=len(df_clean)),
-            0, 1
-        )
-    dqn2_prob = dqn1_prob.copy()
-    if use_opt_tuning:
-        dqn2_prob = np.clip(dqn1_prob + (y_true_arr - 0.5)*0.05, 0, 1)
+            using_real = False
 
     # 3) Consistent test split
-    idx = np.arange(len(df_clean))
+    idx = np.arange(len(y_true_arr))
     _, _, _, _, _, idx_test = train_test_split(
-        a_star_prob_arr.reshape(-1,1), y_true_arr, idx, test_size=0.3, random_state=19, stratify=y_true_arr
+        a_star_prob_arr.reshape(-1, 1), y_true_arr, idx, test_size=0.3, random_state=19, stratify=y_true_arr
     )
 
-    E = {
-        "A*":      _evaluate_probs(y_true_arr[idx_test], a_star_prob_arr[idx_test]),
-        "DQN v0":  _evaluate_probs(y_true_arr[idx_test], dqn0_prob_arr[idx_test]),
-        "DQN v1":  _evaluate_probs(y_true_arr[idx_test], dqn1_prob[idx_test]),
-        "DQN v2":  _evaluate_probs(y_true_arr[idx_test], dqn2_prob[idx_test]),
-    }
+    # Build evaluation dict
+    E = {"A*": _evaluate_probs(y_true_arr[idx_test], a_star_prob_arr[idx_test])}
+    if dqn0_prob_arr is not None:
+        E["DQN"] = _evaluate_probs(y_true_arr[idx_test], dqn0_prob_arr[idx_test])
+
+    # Only include synthetic v1/v2 when we’re not using real RL outputs
+    if not using_real:
+        E["DQN v1"] = _evaluate_probs(y_true_arr[idx_test], dqn1_prob[idx_test])
+        E["DQN v2"] = _evaluate_probs(y_true_arr[idx_test], dqn2_prob[idx_test])
 
     # === Sub-tabs ===
     tab_over, tab_eval, tab_refine, tab_eda = st.tabs(
@@ -660,23 +654,23 @@ def render_advanced_analysis_tab(
     # Overview
     with tab_over:
         st.caption(f"Source: **{data_mode_label}** | Rows: {len(df_clean):,}")
-        c1, c2, c3, c4 = st.columns(4)
-        for name, col in zip(["A*", "DQN v0", "DQN v1", "DQN v2"], [c1, c2, c3, c4]):
-            col.metric(name, value=f"{E[name]['auc']:.3f} AUC", delta=f"F1 {E[name]['f1']:.3f}")
+        cols = st.columns(len(E))
+        for (name, metrics), col in zip(E.items(), cols):
+            col.metric(name, value=f"{metrics['auc']:.3f} AUC", delta=f"F1 {metrics['f1']:.3f}")
         st.dataframe(df_clean.head(20), use_container_width=True)
 
     # Detailed Evaluation
     with tab_eval:
         st.subheader("ROC Curves")
         fig = plt.figure()
-        for name in ["A*", "DQN v0", "DQN v1", "DQN v2"]:
+        for name in E.keys():
             plt.plot(E[name]["fpr"], E[name]["tpr"], label=f"{name} (AUC={E[name]['auc']:.3f})")
-        plt.plot([0,1],[0,1], "--")
+        plt.plot([0, 1], [0, 1], "--")
         plt.xlabel("False Positive Rate"); plt.ylabel("True Positive Rate")
         plt.legend(loc="lower right"); st.pyplot(fig)
 
         st.subheader("Confusion Matrices")
-        for name in ["A*","DQN v0","DQN v1","DQN v2"]:
+        for name in E.keys():
             fig, ax = plt.subplots()
             ConfusionMatrixDisplay(E[name]["cm"]).plot(ax=ax)
             ax.set_title(name); st.pyplot(fig)
@@ -688,13 +682,13 @@ def render_advanced_analysis_tab(
         } for k in E])
         st.dataframe(mdf, use_container_width=True)
 
-    # Refinements (delta view)
+    # Refinements (delta view) — only helpful when proxies are shown
     with tab_refine:
-        st.write("Performance before/after refinements (v0 → v1 → v2).")
-        fig = plt.figure(figsize=(8,4))
+        st.write("Performance across models (AUC not shown here for brevity).")
+        fig = plt.figure(figsize=(8, 4))
         labels = list(E.keys())
         accs = [E[k]["acc"] for k in labels]
-        plt.bar(labels, accs); plt.ylim(0,1)
+        plt.bar(labels, accs); plt.ylim(0, 1)
         plt.title("Accuracy by Model"); st.pyplot(fig)
 
     # EDA & Trends
@@ -702,24 +696,31 @@ def render_advanced_analysis_tab(
         st.subheader("Correlation Heatmap")
         eda = df_clean.copy()
         eda["on_time_true"] = y_true_arr
-        eda["a_star_prob_arr"]  = a_star_prob_arr
-        eda["dqn0_prob_arr"]    = dqn0_prob_arr
-        eda["dqn2_prob"]    = dqn2_prob
+        eda["a_star_prob"]  = a_star_prob_arr
+        if dqn0_prob_arr is not None:
+            eda["dqn_prob"] = dqn0_prob_arr
+        if not using_real:
+            eda["dqn2_prob"] = dqn2_prob
         corr = eda.corr(numeric_only=True)
-        fig = plt.figure(figsize=(7,6))
-        plt.imshow(corr, interpolation='nearest'); plt.xticks(range(len(corr.columns)), corr.columns, rotation=90)
-        plt.yticks(range(len(corr.index)), corr.index); plt.colorbar()
-        plt.title("Correlation Matrix"); st.pyplot(fig)
+        fig = plt.figure(figsize=(7, 6))
+        plt.imshow(corr, interpolation='nearest')
+        plt.xticks(range(len(corr.columns)), corr.columns, rotation=90)
+        plt.yticks(range(len(corr.index)), corr.index)
+        plt.colorbar(); plt.title("Correlation Matrix"); st.pyplot(fig)
 
         st.subheader("Trends by Distance Buckets")
         eda["distance_bucket"] = pd.cut(eda["distance_km"], bins=[0,5,10,15,20,30,50], include_lowest=True)
-        group = eda.groupby("distance_bucket").agg(
-            true=("on_time_true","mean"),
-            dqn2=("dqn2_prob","mean")
-        ).reset_index()
+        series = {"true": ("on_time_true", "mean")}
+        if "dqn2_prob" in eda.columns:
+            series["dqn2"] = ("dqn2_prob", "mean")
+        elif "dqn_prob" in eda.columns:
+            series["dqn"] = ("dqn_prob", "mean")
+        group = eda.groupby("distance_bucket").agg(**series).reset_index()
         fig = plt.figure()
         plt.plot(group["distance_bucket"].astype(str), group["true"], marker="o", label="True on-time")
-        plt.plot(group["distance_bucket"].astype(str), group["dqn2"],  marker="o", label="DQN v2")
+        for col in group.columns:
+            if col not in ("distance_bucket", "true"):
+                plt.plot(group["distance_bucket"].astype(str), group[col], marker="o", label=col.upper())
         plt.xticks(rotation=30, ha="right"); plt.legend(); plt.ylabel("Rate")
         plt.title("On-time vs Distance"); st.pyplot(fig)
 
@@ -812,7 +813,7 @@ with st.sidebar:
 
 # --- Advanced Analysis controls ---
 st.subheader("Advanced Analysis Controls")
-as_sla_min = st.number_input("SLA (minutes)", min_value=30, max_value=240, value=90, step=5)
+aa_sla_min = st.number_input("SLA (minutes)", min_value=30, max_value=240, value=90, step=5)
 aa_use_reward_shaping = st.checkbox("Apply v1: Reward Shaping", value=True)
 aa_use_opt_tuning     = st.checkbox("Apply v2: Optimization Tuning", value=True)
 
