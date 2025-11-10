@@ -261,59 +261,22 @@ h2, .stSubheader {margin-top:0.2rem; margin-bottom:0.4rem;}
 </style>
 """, unsafe_allow_html=True)
 
-# --- Top header bar with logo + title (clean, single, aligned) ---
+# --- Top header bar with logo + title ---
 from pathlib import Path
 
-# Path to logo inside repo
+# Resolve logo inside repo (relative to app.py)
 logo_path = Path(__file__).parent / "assets" / "logo.png"
-
-# Add clean header styling
-st.markdown("""
-<style>
-.app-header {
-    display: flex;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 12px;
-    padding: 10px 16px;
-    background-color: #ffffff;
-    border-bottom: 1px solid #e5e7eb;
-    margin-bottom: 0.8rem;
-}
-.app-header img {
-    height: 42px;
-    width: auto;
-    border-radius: 6px;
-}
-.app-header h1 {
-    font-size: 1.6rem;
-    font-weight: 700;
-    color: #222;
-    margin: 0;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# Render header
-if logo_path.exists():
-    st.markdown(
-        f"""
-        <div class="app-header">
-            <img src="{logo_path.as_posix()}" alt="logo">
-            <h1>RL Supply-Chain Routing Simulator</h1>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+if not logo_path.exists():
+    st.warning(f"⚠️ Logo not found at {logo_path}. Check your assets folder or update the path.")
 else:
-    st.markdown(
-        """
-        <div class="app-header">
-            <h1>RL Supply-Chain Routing Simulator</h1>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    c1, c2 = st.columns([0.08, 0.92])
+    with c1:
+        st.image(str(logo_path), width=45)
+    with c2:
+        st.markdown(
+            "<h1 style='margin:0; font-size:1.6rem;'>RL Supply-Chain Routing Simulator</h1>",
+            unsafe_allow_html=True,
+        )
 
 has_data = ctx.get("edges_df") is not None
 
