@@ -742,35 +742,72 @@ def render_advanced_analysis_tab(
     # EDA & Trends
     with tab_eda:
         st.subheader("Correlation Heatmap")
-        eda = df_clean.copy()
-        eda["on_time_true"] = y_true_arr
-        eda["a_star_prob"]  = a_star_prob_arr
-        if dqn0_prob_arr is not None:
-            eda["dqn_prob"] = dqn0_prob_arr
-        if not using_real:
-            eda["dqn2_prob"] = dqn2_prob_arr
+
+        same_len = (len(y_true_arr) == len(df_clean))
+        if same_len:
+            # We can enrich the original cleaned frame
+            eda = df_clean.copy()
+            eda["on_time_true"] = y_true_arr
+            eda["a_star_prob"]  = a_star_prob_arr
+            if dqn0_prob_arr is not None:
+                eda["dqn_prob"] = dqn0_prob_arr
+            if not using_real:
+                # Only when we're using proxy refinements
+                eda["dqn2_prob"] = dqn2_prob
+        else:
+            # Fall back to a self-contained EDA frame built from evaluation arrays only
+            st.info(
+                "Evaluation sample size differs from the cleaned dataset. "
+                "Showing correlations on the evaluation sample only."
+            )
+            cols = {
+                "on_time_true": y_true_arr,
+                "a_star_prob":  a_star_prob_arr,
+            }
+            if dqn0_prob_arr is not None:
+                cols["dqn_prob"] = dqn0_prob_arr
+            if not using_real:
+                cols["dqn2_prob"] = dqn2_prob[:len(y_true_arr)] if 'dqn2_prob' in locals() else None
+            eda = pd.DataFrame({k: v for k, v in cols.items() if v is not None})
+
         corr = eda.corr(numeric_only=True)
         fig = plt.figure(figsize=(7, 6))
         plt.imshow(corr, interpolation='nearest')
         plt.xticks(range(len(corr.columns)), corr.columns, rotation=90)
         plt.yticks(range(len(corr.index)), corr.index)
-        plt.colorbar(); plt.title("Correlation Matrix"); st.pyplot(fig)
+        plt.colorbar()
+        plt.title("Correlation Matrix")
+        st.pyplot(fig)
 
         st.subheader("Trends by Distance Buckets")
-        eda["distance_bucket"] = pd.cut(eda["distance_km"], bins=[0,5,10,15,20,30,50], include_lowest=True)
-        series = {"true": ("on_time_true", "mean")}
-        if "dqn2_prob" in eda.columns:
-            series["dqn2"] = ("dqn2_prob", "mean")
-        elif "dqn_prob" in eda.columns:
-            series["dqn"] = ("dqn_prob", "mean")
-        group = eda.groupby("distance_bucket").agg(**series).reset_index()
-        fig = plt.figure()
-        plt.plot(group["distance_bucket"].astype(str), group["true"], marker="o", label="True on-time")
-        for col in group.columns:
-            if col not in ("distance_bucket", "true"):
-                plt.plot(group["distance_bucket"].astype(str), group[col], marker="o", label=col.upper())
-        plt.xticks(rotation=30, ha="right"); plt.legend(); plt.ylabel("Rate")
-        plt.title("On-time vs Distance"); st.pyplot(fig)
+        if same_len and "distance_km" in df_clean.columns:
+            eda["distance_bucket"] = pd.cut(
+                eda["distance_km"], bins=[0,5,10,15,20,30,50], include_lowest=True
+            )
+            group = eda.groupby("distance_bucket").agg(
+                true=("on_time_true","mean"),
+                **(
+                    {"dqn2": ("dqn2_prob","mean")}
+                    if "dqn2_prob" in eda.columns else
+                    {"dqn": ("dqn_prob","mean")} if "dqn_prob" in eda.columns
+                    else {}
+                )
+            ).reset_index()
+
+            fig = plt.figure()
+            plt.plot(group["distance_bucket"].astype(str), group["true"], marker="o", label="True on-time")
+            for col in group.columns:
+                if col not in ("distance_bucket", "true"):
+                    plt.plot(group["distance_bucket"].astype(str), group[col], marker="o", label=col.upper())
+            plt.xticks(rotation=30, ha="right")
+            plt.legend()
+            plt.ylabel("Rate")
+            plt.title("On-time vs Distance")
+            st.pyplot(fig)
+        else:
+            st.info(
+                "Distance-bucket trends skipped because `distance_km` isn’t aligned with the evaluation sample."
+            )
 
 # ---------------------------- Sidebar ----------------------------
 with st.sidebar:
