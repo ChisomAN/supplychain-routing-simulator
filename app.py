@@ -231,6 +231,111 @@ for d in (ART_DIR, LOG_DIR, DATA_DIR, REP_DIR):
     os.makedirs(d, exist_ok=True)
 
 st.set_page_config(page_title="RL Supply-Chain Simulator", layout="wide")
+# ---- Dark/Light CSS (auto-aware) ----
+def inject_theme_css(theme_choice: str):
+    # Base (Light) palette; will be overridden below if Dark/Auto-dark
+    light = {
+        "bg": "#ffffff", "text": "#111827", "muted": "#4b5563", "border": "#e5e7eb",
+        "card": "#ffffff", "chip_bg": "#ffffff", "chip_border": "#eef2f7"
+    }
+    dark = {
+        "bg": "#0e1117", "text": "#e5e7eb", "muted": "#9ca3af", "border": "#1f2937",
+        "card": "#111827", "chip_bg": "#0f172a", "chip_border": "#1f2937"
+    }
+
+    # Inline CSS uses CSS variables; Auto relies on prefers-color-scheme
+    css = f"""
+    <style>
+      :root {{
+        --bg: {light['bg']};
+        --text: {light['text']};
+        --muted: {light['muted']};
+        --border: {light['border']};
+        --card: {light['card']};
+        --chip-bg: {light['chip_bg']};
+        --chip-border: {light['chip_border']};
+      }}
+      .app-header {{
+        display:flex; align-items:center; gap:12px;
+        padding:10px 16px; background: var(--bg);
+        border-bottom:1px solid var(--border); margin-bottom:0.8rem;
+      }}
+      .app-header img {{ height:42px; width:auto; border-radius:6px; }}
+      .app-header h1 {{ font-size:1.6rem; font-weight:700; color: var(--text); margin:0; }}
+
+      /* General text contrast tweaks */
+      .stMarkdown, .stText, .stRadio, .stSelectbox, .stSlider, label, p, span, h1,h2,h3,h4,h5,h6 {{
+        color: var(--text);
+      }}
+
+      /* Metric chips */
+      [data-testid="stMetric"] {{
+        background: var(--chip-bg)!important;
+        border: 1px solid var(--chip-border)!important;
+        border-radius:12px; padding:12px; margin-bottom:8px;
+      }}
+      /* Dataframes & cards */
+      .stDataFrame, .stTable, .element-container {{
+        color: var(--text);
+      }}
+
+      /* AUTO: follow system dark mode */
+      @media (prefers-color-scheme: dark) {{
+        :root {{
+          --bg: {dark['bg']};
+          --text: {dark['text']};
+          --muted: {dark['muted']};
+          --border: {dark['border']};
+          --card: {dark['card']};
+          --chip-bg: {dark['chip_bg']};
+          --chip-border: {dark['chip_border']};
+        }}
+      }}
+    </style>
+    """
+
+    # If user forced a theme, override variables after the block
+    if theme_choice in ("Light", "Dark"):
+        forced = dark if theme_choice == "Dark" else light
+        css += f"""
+        <style>
+          :root {{
+            --bg: {forced['bg']};
+            --text: {forced['text']};
+            --muted: {forced['muted']};
+            --border: {forced['border']};
+            --card: {forced['card']};
+            --chip-bg: {forced['chip_bg']};
+            --chip-border: {forced['chip_border']};
+          }}
+        </style>
+        """
+
+    st.markdown(css, unsafe_allow_html=True)
+
+# Call it as early as possible (after sidebar has set theme_choice if already run)
+inject_theme_css(st.session_state.get("_theme_choice", "Auto"))
+
+# Plot style to match theme
+import plotly.express as px
+import matplotlib.pyplot as plt
+
+_choice = st.session_state.get("_theme_choice", "Auto")
+# Simple heuristic: if forced Dark, or Auto + system is dark (Streamlit's native dark theme is also fine)
+force_dark = (_choice == "Dark")
+force_light = (_choice == "Light")
+
+if force_dark:
+    px.defaults.template = "plotly_dark"
+    plt.style.use("dark_background")
+elif force_light:
+    px.defaults.template = "plotly_white"
+    plt.style.use("default")
+else:
+    # Auto: pick a sensible default; Plotly follows page background fine either way
+    px.defaults.template = "plotly_white"
+    plt.style.use("default")
+
 st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
 st.title("RL Supply-Chain Routing Simulator")
 
@@ -933,6 +1038,35 @@ with st.sidebar:
     st.subheader("Charts")
     ctx["use_mpl"] = st.checkbox(
         "Use Matplotlib for plots (optional)", value=False)
+
+        st.divider()
+    st.subheader("Theme")
+    theme_choice = st.selectbox("Appearance", ["Auto", "Light", "Dark"], index=0, key="theme_choice")
+
+    def _theme_palette(choice: str):
+        # defaults = light
+        palette = {
+            "bg": "#ffffff",
+            "text": "#111827",
+            "muted": "#4b5563",
+            "border": "#e5e7eb",
+            "card": "#ffffff",
+            "chip_bg": "#ffffff",
+            "chip_border": "#eef2f7",
+        }
+        if choice == "Dark":
+            palette.update({
+                "bg": "#0e1117",
+                "text": "#e5e7eb",
+                "muted": "#9ca3af",
+                "border": "#1f2937",
+                "card": "#111827",
+                "chip_bg": "#0f172a",
+                "chip_border": "#1f2937",
+            })
+        return palette
+
+    st.session_state["_theme_choice"] = theme_choice
 
 # --- Advanced Analysis controls ---
 st.subheader("Advanced Analysis Controls")
