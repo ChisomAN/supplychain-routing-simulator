@@ -781,7 +781,7 @@ aa_use_opt_tuning     = st.checkbox("Apply v2: Optimization Tuning", value=True)
 st.markdown("---")
 aa_data_mode = st.radio("Advanced Analysis Dataset", ["Sample CSV", "Upload CSV"], index=0, key="aa_data_mode")
 aa_uploaded = None
-if aa_uploaded = "Upload CSV":
+if aa_data_mode == "Upload CSV":
     aa_uploaded = st.file_uploader(
         "Upload edges CSV for Advanced Analysis",
         type=["csv"], key="aa_uploader"
