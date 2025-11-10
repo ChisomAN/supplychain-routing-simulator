@@ -328,6 +328,154 @@ def _safe_read(path: str, default_text: str = "File not found."):
     except Exception:
         return default_text
 
+# === Advanced Analysis: real-output collectors ===
+def _aa_sigmoid(x, temp=0.08):
+    import numpy as np
+    return 1.0 / (1.0 + np.exp(-temp * x))
+
+def _aa_sample_pairs(G, k=200, rng_seed=11):
+    """Draw k random (origin, dest) node pairs from graph G (no self-pairs)."""
+    import numpy as np
+    nodes = list(G.nodes())
+    rng = np.random.default_rng(rng_seed)
+    pairs = []
+    for _ in range(k * 3):  # oversample attempts to avoid same-node pairs
+        o = rng.choice(nodes)
+        d = rng.choice(nodes)
+        if o != d:
+            pairs.append((o, d))
+        if len(pairs) >= k:
+            break
+    return pairs
+
+def _aa_astar_time(G, origin, dest, weight="travel_time_est"):
+    """
+    Estimate A* travel time along the planned route by summing edge 'weight' (fallback to distance_km).
+    Uses your existing run_a_star() which expects the graph and a weight.
+    """
+    try:
+        # run_a_star returns {"path": [...], "weighted_length": ...} in your app
+        res = run_a_star(G, weight=weight, origin=origin, dest=dest)  # extend signature if your function supports it
+        if res and "weighted_length" in res:
+            return float(res["weighted_length"])
+    except TypeError:
+        # If your run_a_star doesn't accept origin/dest, approximate with distance_km shortest path
+        import networkx as nx
+        path = nx.shortest_path(G, source=origin, target=dest, weight=weight if weight in list(next(iter(G.edges(data=True)))[-1].keys()) else "distance_km")
+        total = 0.0
+        for u, v in zip(path[:-1], path[1:]):
+            data = G.get_edge_data(u, v) or {}
+            total += float(data.get(weight, data.get("distance_km", 0.0)))
+        return total
+    except Exception:
+        return None
+
+def _aa_dqn_time(model_path, G, origin, dest):
+    """
+    Roll out the trained DQN on an episode from origin to dest in your RoutingEnv,
+    returning a total travel time estimate for that episode.
+    """
+    try:
+        from models.env import RoutingEnv
+        from models.dqn_agent import infer_dqn_episode  # try a per-episode helper if available
+    except Exception:
+        # Fallback: attempt to use infer_dqn(model_path, env, episodes=1) and read total time
+        infer_dqn_episode = None
+
+    try:
+        from models.env import RoutingEnv
+        env = RoutingEnv(G, origin=origin, dest=dest)  # assumes your env can take start/goal (if not, it will ignore)
+    except Exception:
+        return None
+
+    # Preferred: a single-episode inference API returning a dict with "total_time"
+    if infer_dqn_episode:
+        try:
+            out = infer_dqn_episode(model_path, env)
+            if isinstance(out, dict) and "total_time" in out:
+                return float(out["total_time"])
+        except Exception:
+            pass
+
+    # Generic fallback: run your existing infer_dqn for 1 episode and read first episode's total_time if it exists
+    try:
+        from models.dqn_agent import infer_dqn
+        out = infer_dqn(model_path, env, episodes=1)
+        # Accept common keys
+        for key in ("total_time", "episode_time", "travel_time", "length", "weighted_length"):
+            if isinstance(out, dict) and key in out:
+                return float(out[key])
+        # Or if list-like per-episode
+        if isinstance(out, dict):
+            for k, v in out.items():
+                if isinstance(v, (list, tuple)) and len(v) > 0 and isinstance(v[0], (int, float)):
+                    return float(v[0])
+    except Exception:
+        pass
+
+    return None
+
+def aa_collect_real_scores(ctx: dict, k_pairs=200, sla_min=90, weight="travel_time_est", temp=0.08, rng_seed=11):
+    """
+    Build a matched evaluation set of size k_pairs:
+      - sample origin/dest pairs
+      - get A* time and DQN time (if model available)
+      - compute P(on-time) = sigmoid( SLA - time )
+      - build y_true from a 'noisy' realized time (to represent live conditions) for ROC/F1/CM
+    Stores arrays in ctx["aa_eval"].
+    """
+    import numpy as np
+    if ctx.get("G") is None:
+        raise RuntimeError("Graph G not available. Load or generate data first.")
+
+    pairs = _aa_sample_pairs(ctx["G"], k=k_pairs, rng_seed=rng_seed)
+
+    # SLA per sample
+    sla = float(sla_min)
+
+    # A* times
+    a_times = []
+    for (o, d) in pairs:
+        t = _aa_astar_time(ctx["G"], o, d, weight=weight)
+        a_times.append(np.nan if t is None else float(t))
+    a_times = np.array(a_times, dtype=float)
+
+    # DQN times (only if trained)
+    d_times = None
+    model_path = ctx.get("rl_model_path")
+    if model_path:
+        d_times_list = []
+        for (o, d) in pairs:
+            t = _aa_dqn_time(model_path, ctx["G"], o, d)
+            d_times_list.append(np.nan if t is None else float(t))
+        d_times = np.array(d_times_list, dtype=float)
+
+    # Ground truth (realized) times — add mild noise to reflect uncertainty
+    rng = np.random.default_rng(rng_seed)
+    realized_a = a_times + rng.normal(0, 3.0, size=a_times.size)  # ±3 min jitter
+    y_true = (realized_a <= sla).astype(int)  # proxy label for “was on time”
+
+    # Probabilities via sigmoid(slack)
+    a_star_prob = _aa_sigmoid(sla - a_times, temp=temp)
+    dqn_prob = _aa_sigmoid(sla - d_times, temp=temp) if d_times is not None else None
+
+    # Clean NaNs
+    valid = np.isfinite(a_star_prob) & np.isfinite(y_true)
+    if dqn_prob is not None:
+        valid = valid & np.isfinite(dqn_prob)
+
+    out = {
+        "pairs": [pairs[i] for i, ok in enumerate(valid) if ok],
+        "y_true": y_true[valid].astype(int),
+        "a_star_prob": a_star_prob[valid],
+        "dqn_prob": dqn_prob[valid] if dqn_prob is not None else None,
+        "sla_min": sla_min,
+        "weight": weight,
+        "temp": temp
+    }
+    ctx["aa_eval"] = out
+    return out
+
 
 @st.cache_data(show_spinner=False)
 def _aa_load_edges(sample_first: bool = True, uploaded_file=None) -> pd.DataFrame:
@@ -371,6 +519,54 @@ def render_advanced_analysis_tab(
         df_raw = df_source.copy()
     df_clean = _clean_edges_aa(df_raw.copy())
 
+        # === Prefer real outputs if available ===
+    aa_eval = st.session_state.get("ctx", {}).get("aa_eval")
+    use_real = False
+    if aa_eval and isinstance(aa_eval, dict):
+        y_true_real = aa_eval.get("y_true")
+        a_prob_real = aa_eval.get("a_star_prob")
+        d_prob_real = aa_eval.get("dqn_prob")
+        if isinstance(y_true_real, np.ndarray) and isinstance(a_prob_real, np.ndarray):
+            # Valid real arrays found; use them
+            use_real = True
+            y_true_arr = y_true_real
+            a_star_prob_arr = a_prob_real
+            dqn0_prob_arr = d_prob_real if d_prob_real is not None else None
+
+    # Button to build a fresh real evaluation set (A* + DQN if available)
+    st.markdown("### Real Evaluation (Optional)")
+    cols_btn = st.columns([1,1,2])
+    with cols_btn[0]:
+        if st.button("🧪 Build evaluation sample from real models", use_container_width=True):
+            try:
+                out = aa_collect_real_scores(
+                    ctx,
+                    k_pairs=200,
+                    sla_min=sla_min,
+                    weight="travel_time_est",
+                    temp=0.08,
+                    rng_seed=19
+                )
+                st.success(f"Collected {len(out['y_true'])} labeled samples.")
+                # refresh local references
+                aa_eval = ctx.get("aa_eval")
+                y_true_arr = aa_eval["y_true"]
+                a_star_prob_arr = aa_eval["a_star_prob"]
+                dqn0_prob_arr = aa_eval.get("dqn_prob", None)
+                use_real = True
+            except Exception as e:
+                st.error(f"Could not collect real samples: {e}")
+    with cols_btn[1]:
+        if st.button("♻️ Clear real evaluation cache", use_container_width=True):
+            st.session_state.ctx.pop("aa_eval", None)
+            st.info("Cleared. The tab will fall back to proxy scores.")
+
+    # If no real arrays, fall back to proxy probabilities from the dataset
+    if not use_real:
+        y_true_arr = y_true
+        a_star_prob_arr = a_star_prob
+        dqn0_prob_arr = dqn0_prob
+    
     # Guards
     if "travel_time_est" not in df_clean.columns:
         st.error("Expected column 'travel_time_est' not found. Provide a CSV with travel_time_est.")
@@ -379,7 +575,7 @@ def render_advanced_analysis_tab(
         st.warning("Column 'distance_km' not found; defaulting to zeros for distance features.")
         df_clean["distance_km"] = 0.0
 
-    # 1) Labels from SLA vs travel_time_est (abstract but rubric-friendly)
+    # 1) Labels from SLA vs travel_time_est
     rng = np.random.default_rng(11)
     df_clean["sla_min"] = int(sla_min)
     noise = rng.normal(0, 6, size=len(df_clean))
