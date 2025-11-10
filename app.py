@@ -580,38 +580,38 @@ def render_advanced_analysis_tab(
     df_clean["sla_min"] = int(sla_min)
     noise = rng.normal(0, 6, size=len(df_clean))
     actual_time = df_clean["travel_time_est"].values + noise
-    y_true = (actual_time <= df_clean["sla_min"].values).astype(int)
+    y_true_arr = (actual_time <= df_clean["sla_min"].values).astype(int)
 
     # 2) Baseline & RL-proxy probabilities
     a_star_score = df_clean["sla_min"].values - df_clean["travel_time_est"].values
     dqn0_score   = a_star_score + rng.normal(0, 5, size=len(df_clean)) + 0.08*df_clean["distance_km"].values*(-0.2)
-    a_star_prob, dqn0_prob = _logistic(a_star_score), _logistic(dqn0_score)
+    a_star_prob_arr, dqn0_prob_arr = _logistic(a_star_score), _logistic(dqn0_score)
 
     # Refinements
     tightness = np.clip((df_clean["sla_min"].values / (df_clean["travel_time_est"].values + 1e-5)), 0.5, 1.5)
     traffic   = np.clip(df_clean["distance_km"].values / max(df_clean["distance_km"].max(), 1e-9), 0, 1)
 
-    dqn1_prob = dqn0_prob.copy()
+    dqn1_prob = dqn0_prob_arr.copy()
     if use_reward_shaping:
         dqn1_prob = np.clip(
-            dqn0_prob + 0.06*(tightness - 1.0) + 0.05*(1.0 - traffic) + rng.normal(0, 0.01, size=len(df_clean)),
+            dqn0_prob_arr + 0.06*(tightness - 1.0) + 0.05*(1.0 - traffic) + rng.normal(0, 0.01, size=len(df_clean)),
             0, 1
         )
     dqn2_prob = dqn1_prob.copy()
     if use_opt_tuning:
-        dqn2_prob = np.clip(dqn1_prob + (y_true - 0.5)*0.05, 0, 1)
+        dqn2_prob = np.clip(dqn1_prob + (y_true_arr - 0.5)*0.05, 0, 1)
 
     # 3) Consistent test split
     idx = np.arange(len(df_clean))
     _, _, _, _, _, idx_test = train_test_split(
-        a_star_prob.reshape(-1,1), y_true, idx, test_size=0.3, random_state=19, stratify=y_true
+        a_star_prob_arr.reshape(-1,1), y_true_arr, idx, test_size=0.3, random_state=19, stratify=y_true_arr
     )
 
     E = {
-        "A*":      _evaluate_probs(y_true[idx_test], a_star_prob[idx_test]),
-        "DQN v0":  _evaluate_probs(y_true[idx_test], dqn0_prob[idx_test]),
-        "DQN v1":  _evaluate_probs(y_true[idx_test], dqn1_prob[idx_test]),
-        "DQN v2":  _evaluate_probs(y_true[idx_test], dqn2_prob[idx_test]),
+        "A*":      _evaluate_probs(y_true_arr[idx_test], a_star_prob_arr[idx_test]),
+        "DQN v0":  _evaluate_probs(y_true_arr[idx_test], dqn0_prob_arr[idx_test]),
+        "DQN v1":  _evaluate_probs(y_true_arr[idx_test], dqn1_prob[idx_test]),
+        "DQN v2":  _evaluate_probs(y_true_arr[idx_test], dqn2_prob[idx_test]),
     }
 
     # === Sub-tabs ===
@@ -663,9 +663,9 @@ def render_advanced_analysis_tab(
     with tab_eda:
         st.subheader("Correlation Heatmap")
         eda = df_clean.copy()
-        eda["on_time_true"] = y_true
-        eda["a_star_prob"]  = a_star_prob
-        eda["dqn0_prob"]    = dqn0_prob
+        eda["on_time_true"] = y_true_arr
+        eda["a_star_prob_arr"]  = a_star_prob_arr
+        eda["dqn0_prob_arr"]    = dqn0_prob_arr
         eda["dqn2_prob"]    = dqn2_prob
         corr = eda.corr(numeric_only=True)
         fig = plt.figure(figsize=(7,6))
