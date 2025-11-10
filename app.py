@@ -588,7 +588,7 @@ aa_uploaded = None
 if aa_uploaded = "Upload CSV":
     aa_uploaded = st.file_uploader(
         "Upload edges CSV for Advanced Analysis",
-        type=["csv", key="aa_uploader"
+        type=["csv"], key="aa_uploader"
     )
 
 # ---------------------------- Tabs ----------------------------
