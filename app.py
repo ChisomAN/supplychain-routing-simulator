@@ -314,7 +314,7 @@ def inject_theme_css(theme_choice: str):
     st.markdown(css, unsafe_allow_html=True)
 
 # Call it as early as possible (after sidebar has set theme_choice if already run)
-inject_theme_css(st.session_state.get("_theme_choice", "Auto"))
+# inject_theme_css(st.session_state.get("_theme_choice", "Auto"))
 
 # Plot style to match theme
 import plotly.express as px
@@ -386,12 +386,14 @@ logo_src  = _img_as_data_uri(logo_path)
 st.markdown("""
 <style>
 .app-header {
-    display: flex; align-items: center; gap: 12px;
-    padding: 10px 16px; background: #fff;
-    border-bottom: 1px solid #e5e7eb; margin-bottom: 0.8rem;
+    display:flex; align-items:center; gap:12px;
+    padding:10px 16px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 0.8rem;
 }
-.app-header img { height: 42px; width: auto; border-radius: 6px; }
-.app-header h1 { font-size: 1.6rem; font-weight: 700; color: #222; margin: 0; }
+.app-header img { height:42px; width:auto; border-radius:6px; }
+.app-header h1 { font-size:1.6rem; font-weight:700; color: var(--text); margin:0; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -1039,7 +1041,7 @@ with st.sidebar:
     ctx["use_mpl"] = st.checkbox(
         "Use Matplotlib for plots (optional)", value=False)
 
-        st.divider()
+    st.divider()
     st.subheader("Theme")
     theme_choice = st.selectbox("Appearance", ["Auto", "Light", "Dark"], index=0, key="theme_choice")
 
@@ -1067,6 +1069,20 @@ with st.sidebar:
         return palette
 
     st.session_state["_theme_choice"] = theme_choice
+
+# Apply the theme now that we have the user's choice
+inject_theme_css(theme_choice)
+
+# Keep Plotly/Matplotlib in sync with the chosen theme
+if theme_choice == "Dark":
+    px.defaults.template = "plotly_dark"
+    plt.style.use("dark_background")
+elif theme_choice == "Light":
+    px.defaults.template = "plotly_white"
+    plt.style.use("default")
+else:  # Auto
+    px.defaults.template = "plotly_white"
+    plt.style.use("default")
 
 # --- Advanced Analysis controls ---
 st.subheader("Advanced Analysis Controls")
