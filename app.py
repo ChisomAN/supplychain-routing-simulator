@@ -230,7 +230,7 @@ REP_DIR = os.path.join(ART_DIR, "reports")
 for d in (ART_DIR, LOG_DIR, DATA_DIR, REP_DIR):
     os.makedirs(d, exist_ok=True)
 
-st.set_page_config(page_title="RL Supply-Chain Simulator", layout="wide")
+st.set_page_config(page_title="RL Supply-Chain Simulator", layout="wide", initial_sidebar_state="auto")
 # ---- Dark/Light CSS (auto-aware) ----
 def inject_theme_css(theme_choice: str):
     # Ask Streamlit what the active base theme is (per config.toml)
