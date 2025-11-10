@@ -261,17 +261,22 @@ h2, .stSubheader {margin-top:0.2rem; margin-bottom:0.4rem;}
 </style>
 """, unsafe_allow_html=True)
 
-# --- Top header bar with logo + quick actions ---
-logo_url = "assets/logo.png"
-st.markdown(
-    f"""
-    <div class="app-header" style="display:flex; align-items:center; gap:10px; margin-bottom:0.5rem;">
-        <img src="{logo_url}" alt="logo" style="height:40px;">
-        <h1 style="margin:0; font-size:1.75rem;">RL Supply-Chain Routing Simulator</h1>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+# --- Top header bar with logo + title ---
+from pathlib import Path
+
+# Resolve logo inside repo (relative to app.py)
+logo_path = Path(__file__).parent / "assets" / "logo.png"
+if not logo_path.exists():
+    st.warning(f"⚠️ Logo not found at {logo_path}. Check your assets folder or update the path.")
+else:
+    c1, c2 = st.columns([0.08, 0.92])
+    with c1:
+        st.image(str(logo_path), width=45)
+    with c2:
+        st.markdown(
+            "<h1 style='margin:0; font-size:1.6rem;'>RL Supply-Chain Routing Simulator</h1>",
+            unsafe_allow_html=True,
+        )
 
 has_data = ctx.get("edges_df") is not None
 
