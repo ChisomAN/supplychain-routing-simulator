@@ -261,22 +261,55 @@ h2, .stSubheader {margin-top:0.2rem; margin-bottom:0.4rem;}
 </style>
 """, unsafe_allow_html=True)
 
-# --- Top header bar with logo + title ---
+# --- Top header bar with logo + title (HTML + base64 image) ---
 from pathlib import Path
+import base64
 
-# Resolve logo inside repo (relative to app.py)
+def _img_as_data_uri(path: Path) -> str | None:
+    try:
+        with open(path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode("utf-8")
+        ext = path.suffix.lower().lstrip(".") or "png"
+        mime = "image/png" if ext == "png" else "image/jpeg" if ext in ("jpg", "jpeg") else "image/svg+xml"
+        return f"data:{mime};base64,{b64}"
+    except Exception:
+        return None
+
 logo_path = Path(__file__).parent / "assets" / "logo.png"
-if not logo_path.exists():
-    st.warning(f"⚠️ Logo not found at {logo_path}. Check your assets folder or update the path.")
+logo_src  = _img_as_data_uri(logo_path)
+
+st.markdown("""
+<style>
+.app-header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px; background: #fff;
+    border-bottom: 1px solid #e5e7eb; margin-bottom: 0.8rem;
+}
+.app-header img { height: 42px; width: auto; border-radius: 6px; }
+.app-header h1 { font-size: 1.6rem; font-weight: 700; color: #222; margin: 0; }
+</style>
+""", unsafe_allow_html=True)
+
+if logo_src:
+    st.markdown(
+        f"""
+        <div class="app-header">
+            <img src="{logo_src}" alt="logo" />
+            <h1>RL Supply-Chain Routing Simulator</h1>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 else:
-    c1, c2 = st.columns([0.08, 0.92])
-    with c1:
-        st.image(str(logo_path), width=45)
-    with c2:
-        st.markdown(
-            "<h1 style='margin:0; font-size:1.6rem;'>RL Supply-Chain Routing Simulator</h1>",
-            unsafe_allow_html=True,
-        )
+    # graceful fallback (no broken image)
+    st.markdown(
+        """
+        <div class="app-header">
+            <h1>RL Supply-Chain Routing Simulator</h1>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 has_data = ctx.get("edges_df") is not None
 
