@@ -233,27 +233,32 @@ for d in (ART_DIR, LOG_DIR, DATA_DIR, REP_DIR):
 st.set_page_config(page_title="RL Supply-Chain Simulator", layout="wide")
 # ---- Dark/Light CSS (auto-aware) ----
 def inject_theme_css(theme_choice: str):
-    # Base (Light) palette; will be overridden below if Dark/Auto-dark
+    # Ask Streamlit what the active base theme is (per config.toml)
+    active_base = st.get_option("theme.base") or "light"  # "light" or "dark"
+
+    # Resolve final palette: user choice wins; "Auto" = follow active_base
+    effective = theme_choice.lower() if theme_choice in ("Light", "Dark") else active_base.lower()
+
     light = {
         "bg": "#ffffff", "text": "#111827", "muted": "#4b5563", "border": "#e5e7eb",
-        "card": "#ffffff", "chip_bg": "#ffffff", "chip_border": "#eef2f7"
+        "card": "#ffffff", "chip_bg": "#ffffff", "chip_border": "#eef2f7",
     }
     dark = {
         "bg": "#0e1117", "text": "#e5e7eb", "muted": "#9ca3af", "border": "#1f2937",
-        "card": "#111827", "chip_bg": "#0f172a", "chip_border": "#1f2937"
+        "card": "#111827", "chip_bg": "#0f172a", "chip_border": "#1f2937",
     }
+    palette = dark if effective == "dark" else light
 
-    # Inline CSS uses CSS variables; Auto relies on prefers-color-scheme
-    css = f"""
+    st.markdown(f"""
     <style>
       :root {{
-        --bg: {light['bg']};
-        --text: {light['text']};
-        --muted: {light['muted']};
-        --border: {light['border']};
-        --card: {light['card']};
-        --chip-bg: {light['chip_bg']};
-        --chip-border: {light['chip_border']};
+        --bg: {palette['bg']};
+        --text: {palette['text']};
+        --muted: {palette['muted']};
+        --border: {palette['border']};
+        --card: {palette['card']};
+        --chip-bg: {palette['chip_bg']};
+        --chip-border: {palette['chip_border']};
       }}
       .app-header {{
         display:flex; align-items:center; gap:12px;
@@ -263,7 +268,7 @@ def inject_theme_css(theme_choice: str):
       .app-header img {{ height:42px; width:auto; border-radius:6px; }}
       .app-header h1 {{ font-size:1.6rem; font-weight:700; color: var(--text); margin:0; }}
 
-      /* General text contrast tweaks */
+      /* General text */
       .stMarkdown, .stText, .stRadio, .stSelectbox, .stSlider, label, p, span, h1,h2,h3,h4,h5,h6 {{
         color: var(--text);
       }}
@@ -274,47 +279,8 @@ def inject_theme_css(theme_choice: str):
         border: 1px solid var(--chip-border)!important;
         border-radius:12px; padding:12px; margin-bottom:8px;
       }}
-      /* Dataframes & cards */
-      .stDataFrame, .stTable, .element-container {{
-        color: var(--text);
-      }}
-
-      /* AUTO: follow system dark mode */
-      @media (prefers-color-scheme: dark) {{
-        :root {{
-          --bg: {dark['bg']};
-          --text: {dark['text']};
-          --muted: {dark['muted']};
-          --border: {dark['border']};
-          --card: {dark['card']};
-          --chip-bg: {dark['chip_bg']};
-          --chip-border: {dark['chip_border']};
-        }}
-      }}
     </style>
-    """
-
-    # If user forced a theme, override variables after the block
-    if theme_choice in ("Light", "Dark"):
-        forced = dark if theme_choice == "Dark" else light
-        css += f"""
-        <style>
-          :root {{
-            --bg: {forced['bg']};
-            --text: {forced['text']};
-            --muted: {forced['muted']};
-            --border: {forced['border']};
-            --card: {forced['card']};
-            --chip-bg: {forced['chip_bg']};
-            --chip-border: {forced['chip_border']};
-          }}
-        </style>
-        """
-
-    st.markdown(css, unsafe_allow_html=True)
-
-# Call it as early as possible (after sidebar has set theme_choice if already run)
-# inject_theme_css(st.session_state.get("_theme_choice", "Auto"))
+    """, unsafe_allow_html=True)
 
 # Plot style to match theme
 import plotly.express as px
@@ -1070,17 +1036,13 @@ with st.sidebar:
 
     st.session_state["_theme_choice"] = theme_choice
 
-# Apply the theme now that we have the user's choice
+# Apply the theme
 inject_theme_css(theme_choice)
 
-# Keep Plotly/Matplotlib in sync with the chosen theme
-if theme_choice == "Dark":
+if (theme_choice == "Dark") or (theme_choice == "Auto" and (st.get_option("theme.base") or "light").lower() == "dark"):
     px.defaults.template = "plotly_dark"
     plt.style.use("dark_background")
-elif theme_choice == "Light":
-    px.defaults.template = "plotly_white"
-    plt.style.use("default")
-else:  # Auto
+else:
     px.defaults.template = "plotly_white"
     plt.style.use("default")
 
