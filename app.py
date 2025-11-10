@@ -303,7 +303,6 @@ else:
     plt.style.use("default")
 
 st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
-st.title("RL Supply-Chain Routing Simulator")
 
 if "ctx" not in st.session_state:
     st.session_state.ctx = {"seed": 42}
@@ -358,8 +357,8 @@ st.markdown("""
     border-bottom: 1px solid var(--border);
     margin-bottom: 0.8rem;
 }
-.app-header img { height:42px; width:auto; border-radius:6px; }
-.app-header h1 { font-size:1.6rem; font-weight:700; color: var(--text); margin:0; }
+.app-header img { height:45px; width:auto; border-radius:6px; vertical-align:middle;}
+.app-header h1 { font-size:1.6rem; font-weight:700; color: var(--text); margin:0; line-height:1; }
 </style>
 """, unsafe_allow_html=True)
 
