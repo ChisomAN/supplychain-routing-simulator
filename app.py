@@ -383,6 +383,41 @@ else:
         unsafe_allow_html=True,
     )
 
+# --- Make main area adapt when the sidebar opens/closes ---
+st.markdown("""
+<style>
+/* Base content width on wide screens */
+section.main > div.block-container{
+  max-width: 1200px;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+/* When the sidebar is OPEN, use the remaining viewport width */
+aside[data-testid="stSidebar"][aria-expanded="true"]
+  ~ section.main > div.block-container{
+  max-width: calc(100vw - 22rem);  /* adjust if your sidebar width differs */
+}
+
+/* When the sidebar is CLOSED, nearly full width */
+aside[data-testid="stSidebar"][aria-expanded="false"]
+  ~ section.main > div.block-container{
+  max-width: 96vw;
+}
+
+/* Small screens: always fluid */
+@media (max-width: 1100px){
+  section.main > div.block-container{ max-width: 96vw; }
+}
+
+/* Keep the top header aligned with content paddings */
+.app-header{
+  margin-left: 0; margin-right: 0;
+  padding-left: 1rem; padding-right: 1rem;
+}
+</style>
+""", unsafe_allow_html=True)
+
 has_data = ctx.get("edges_df") is not None
 
 # --- Quick action buttons ---
