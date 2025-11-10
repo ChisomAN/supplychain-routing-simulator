@@ -480,10 +480,22 @@ def aa_collect_real_scores(ctx: dict, k_pairs=200, sla_min=90, weight="travel_ti
 @st.cache_data(show_spinner=False)
 def _aa_load_edges(sample_first: bool = True, uploaded_file=None) -> pd.DataFrame:
     """
-    Tries project samples first, then local working dir, then uploaded file.
-    Expects columns: distance_km, travel_time_est (others optional).
+    Try, in order:
+      1) uploaded_file (if provided)
+      2) project samples: /mnt/data/sample_edges.csv, ./sample_edges.csv
+      3) latest CSV in artifacts/datasets
+      4) app context: ctx['edges_clean'] or ctx['edges_df']
+    If none found, raise FileNotFoundError (handled by caller).
     """
+    import glob
     from pathlib import Path
+    import streamlit as st
+
+    # 1) direct upload
+    if uploaded_file is not None:
+        return pd.read_csv(uploaded_file)
+
+    # 2) project samples
     candidates = []
     if sample_first:
         candidates += ["/mnt/data/sample_edges.csv", "sample_edges.csv"]
@@ -493,12 +505,27 @@ def _aa_load_edges(sample_first: bool = True, uploaded_file=None) -> pd.DataFram
                 return pd.read_csv(p)
             except Exception:
                 pass
-    if uploaded_file is not None:
-        return pd.read_csv(uploaded_file)
-    # fallback to app context if already loaded
-    if st.session_state.get("ctx", {}).get("edges_df") is not None:
-        return st.session_state.ctx["edges_df"].copy()
-    raise FileNotFoundError("No CSV found for Advanced Analysis. Provide sample_edges.csv or upload a file.")
+
+    # 3) latest CSV from artifacts/datasets (your app’s default data dir)
+    data_dir = Path("artifacts") / "datasets"
+    if data_dir.exists():
+        csvs = sorted(glob.glob(str(data_dir / "*.csv")), key=os.path.getmtime, reverse=True)
+        for p in csvs:
+            try:
+                return pd.read_csv(p)
+            except Exception:
+                continue
+
+    # 4) app context
+    ctx = st.session_state.get("ctx", {})
+    if isinstance(ctx, dict):
+        if isinstance(ctx.get("edges_clean"), pd.DataFrame) and not ctx["edges_clean"].empty:
+            return ctx["edges_clean"].copy()
+        if isinstance(ctx.get("edges_df"), pd.DataFrame) and not ctx["edges_df"].empty:
+            return ctx["edges_df"].copy()
+
+    # nothing found
+    raise FileNotFoundError("No CSV available for Advanced Analysis.")
 
 def render_advanced_analysis_tab(
     df_source: pd.DataFrame | None,
@@ -512,11 +539,22 @@ def render_advanced_analysis_tab(
     Renders the Advanced Analysis tab (metrics, ROC, confusion matrices, EDA, refinements).
     Uses proxy probabilities unless you later swap in your real model outputs.
     """
-    # 0) Load/clean
-    if df_source is None:
-        df_raw = _aa_load_edges(sample_first=(data_mode_label == "Sample"), uploaded_file=uploaded_file)
-    else:
+        # 0) Load/clean data (robust fallbacks + graceful exit)
+    df_raw = None
+    if df_source is not None:
         df_raw = df_source.copy()
+    else:
+        try:
+            df_raw = _aa_load_edges(sample_first=(data_mode_label == "Sample"), uploaded_file=uploaded_file)
+        except FileNotFoundError:
+            st.info(
+                "No dataset available for Advanced Analysis yet. "
+                "Please either:\n"
+                "• Upload a CSV in the sidebar (Advanced Analysis Dataset → Upload CSV), or\n"
+                "• Generate/Load data in other tabs and click **Apply Cleaning** (so `edges_clean` becomes available)."
+            )
+            return
+
     df_clean = _clean_edges_aa(df_raw.copy())
 
         # === Prefer real outputs if available ===
@@ -1160,7 +1198,9 @@ with T7:
 with TA:
     st.subheader("Advanced Analysis & Model Refinement")
     render_advanced_analysis_tab(
-        df_source=ctx.get("edges_clean") if ctx.get("edges_clean") is not None else None,
+        df_source = (ctx.get("edges_clean") if ctx.get("edges_clean") is not None
+                 else ctx.get("edges_df") if ctx.get("edges_df") is not None
+                 else None),
         sla_min=int(aa_sla_min) if 'aa_sla_min' in locals() else 90,
         use_reward_shaping=bool(aa_use_reward_shaping) if 'aa_use_reward_shaping' in locals() else True,
         use_opt_tuning=bool(aa_use_opt_tuning) if 'aa_use_opt_tuning' in locals() else True,
