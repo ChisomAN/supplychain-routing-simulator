@@ -91,9 +91,22 @@ def _evaluate_probs(y_true: np.ndarray, y_prob: np.ndarray, thr: float = 0.5) ->
     precision, recall, f1, _ = precision_recall_fscore_support(
         y_true, y_pred, average="binary", zero_division=0
     )
-    fpr, tpr, _ = roc_curve(y_true, y_prob)
-    roc_auc = auc(fpr, tpr)
-    cm = confusion_matrix(y_true, y_pred)
+
+    # Handle degenerate cases for ROC/AUC when y_true has 1 class
+    unique = np.unique(y_true)
+    if unique.size < 2:
+        # No ROC curve possible; return NaNs and a dummy diagonal
+        fpr = np.array([0.0, 1.0], dtype=float)
+        tpr = np.array([0.0, 1.0], dtype=float)
+        roc_auc = float("nan")
+    else:
+        fpr, tpr, _ = roc_curve(y_true, y_prob)
+        try:
+            roc_auc = auc(fpr, tpr)
+        except Exception:
+            roc_auc = float("nan")
+
+    cm = confusion_matrix(y_true, y_pred, labels=[0,1])
     return dict(acc=acc, prec=precision, rec=recall, f1=f1,
                 fpr=fpr, tpr=tpr, auc=roc_auc, cm=cm)
     
@@ -630,11 +643,46 @@ def render_advanced_analysis_tab(
             st.info("Cleared. The tab will fall back to proxy scores.")
             using_real = False
 
-    # 3) Consistent test split
+        # 3) Consistent test split (robust to tiny/imbalanced data)
     idx = np.arange(len(y_true_arr))
-    _, _, _, _, _, idx_test = train_test_split(
-        a_star_prob_arr.reshape(-1, 1), y_true_arr, idx, test_size=0.3, random_state=19, stratify=y_true_arr
-    )
+    n = len(y_true_arr)
+
+    if n < 5:
+        # If the dataset is very small, just evaluate on the whole set
+        st.warning("Dataset is very small; evaluating on all samples (no holdout split).")
+        idx_test = idx
+    else:
+        # Pick a test size that leaves at least 1 train sample
+        n_test = max(1, int(round(n * 0.30)))
+        if n_test >= n:
+            n_test = n - 1
+        test_size = n_test / n
+
+        # Use stratify only if both classes exist and each has at least 2 samples
+        unique, counts = np.unique(y_true_arr, return_counts=True)
+        can_stratify = (unique.size >= 2) and (counts.min() >= 2)
+
+        try:
+            _, X_te, _, y_te, _, idx_te = train_test_split(
+                a_star_prob_arr.reshape(-1, 1),
+                y_true_arr,
+                idx,
+                test_size=test_size,
+                random_state=19,
+                stratify=(y_true_arr if can_stratify else None)
+            )
+            idx_test = idx_te
+        except ValueError:
+            # Fall back to a non-stratified split if sklearn still complains
+            _, X_te, _, y_te, _, idx_te = train_test_split(
+                a_star_prob_arr.reshape(-1, 1),
+                y_true_arr,
+                idx,
+                test_size=test_size,
+                random_state=19,
+                stratify=None
+            )
+            idx_test = idx_te
 
     # Build evaluation dict
     E = {"A*": _evaluate_probs(y_true_arr[idx_test], a_star_prob_arr[idx_test])}
@@ -700,7 +748,7 @@ def render_advanced_analysis_tab(
         if dqn0_prob_arr is not None:
             eda["dqn_prob"] = dqn0_prob_arr
         if not using_real:
-            eda["dqn2_prob"] = dqn2_prob
+            eda["dqn2_prob"] = dqn2_prob_arr
         corr = eda.corr(numeric_only=True)
         fig = plt.figure(figsize=(7, 6))
         plt.imshow(corr, interpolation='nearest')
