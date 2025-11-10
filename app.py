@@ -308,6 +308,22 @@ if "ctx" not in st.session_state:
     st.session_state.ctx = {"seed": 42}
 ctx = st.session_state.ctx
 
+# ---------------------------- Utilities ----------------------------
+def log_run(event: str, payload: dict):
+    """Append a JSON line to artifacts/logs/runs.jsonl"""
+    rec = {"ts": datetime.utcnow().isoformat() + "Z",
+           "event": event, **payload}
+    with open(os.path.join(LOG_DIR, "runs.jsonl"), "a", encoding="utf-8") as f:
+        f.write(json.dumps(rec) + "\n")
+
+
+def _safe_read(path: str, default_text: str = "File not found."):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    except Exception:
+        return default_text
+
 st.markdown("""
 <style>
 /* content width + spacing */
@@ -467,24 +483,6 @@ if gen_quick_report:
                 )
     except Exception as e:
         st.error(f"Quick report failed: {e}")
-
-# ---------------------------- Utilities ----------------------------
-
-
-def log_run(event: str, payload: dict):
-    """Append a JSON line to artifacts/logs/runs.jsonl"""
-    rec = {"ts": datetime.utcnow().isoformat() + "Z",
-           "event": event, **payload}
-    with open(os.path.join(LOG_DIR, "runs.jsonl"), "a", encoding="utf-8") as f:
-        f.write(json.dumps(rec) + "\n")
-
-
-def _safe_read(path: str, default_text: str = "File not found."):
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return f.read()
-    except Exception:
-        return default_text
 
 # === Advanced Analysis: real-output collectors ===
 def _aa_sigmoid(x, temp=0.08):
