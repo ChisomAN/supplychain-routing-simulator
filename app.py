@@ -1232,19 +1232,24 @@ with T2:
             col = st.selectbox("Histogram column", num_cols)
             fig = hist_plot(df, col, use_matplotlib=use_mpl)
             if fig is not None:
-                st.pyplot(fig, use_container_width=True) if use_mpl else st.plotly_chart(fig, use_container_width=True)
-
+                if use_mpl:
+                    _ = st.pyplot(fig, use_container_width=True)
+                else:
+                    _ = st.plotly_chart(fig, use_container_width=True)
+            
             if len(num_cols) >= 2:
                 cA, cB = st.columns(2)
                 with cA: x = st.selectbox("X", num_cols, index=0)
                 with cB: y = st.selectbox("Y", num_cols, index=1)
                 fig2 = scatter_plot(df, x, y, use_matplotlib=use_mpl)
                 if fig2 is not None:
-                    st.pyplot(fig2, use_container_width=True) if use_mpl else st.plotly_chart(fig2, use_container_width=True)
+                    if use_mpl:
+                        _ = st.pyplot(fig2, use_container_width=True)
+                    else:
+                        _ = st.plotly_chart(fig2, use_container_width=True)
 
         st.markdown("**Summary statistics**")
-        st.dataframe(df.describe().T, use_container_width=True)
-        
+        st.dataframe(df.describe().T, use_container_width=True) 
 
 # ---------------------------- Clean ----------------------------
 with T3:
