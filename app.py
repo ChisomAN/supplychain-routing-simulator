@@ -783,10 +783,36 @@ def render_advanced_analysis_tab(
             except Exception as e:
                 st.error(f"Could not collect real samples: {e}")
     with cols_btn[1]:
-        if st.button("♻️ Clear real evaluation cache", use_container_width=True):
-            st.session_state.ctx.pop("aa_eval", None)
-            st.info("Cleared. The tab will fall back to proxy scores.")
-            using_real = False
+    if st.button("♻️ Clear real evaluation cache", use_container_width=True):
+        st.session_state.ctx.pop("aa_eval", None)
+        using_real = False
+
+        # ⬇️ Reset evaluation arrays back to the proxy set so lengths align
+        rng = np.random.default_rng(11)
+        df_clean["sla_min"] = int(sla_min)
+        noise = rng.normal(0, 6, size=len(df_clean))
+        actual_time = df_clean["travel_time_est"].values + noise
+        y_true_arr = (actual_time <= df_clean["sla_min"].values).astype(int)
+
+        a_star_score = df_clean["sla_min"].values - df_clean["travel_time_est"].values
+        dqn0_score   = a_star_score + rng.normal(0, 5, size=len(df_clean)) + 0.08*df_clean["distance_km"].values*(-0.2)
+        a_star_prob_arr = _logistic(a_star_score)
+        dqn0_prob_arr   = _logistic(dqn0_score)
+
+        tightness = np.clip((df_clean["sla_min"].values / (df_clean["travel_time_est"].values + 1e-5)), 0.5, 1.5)
+        traffic   = np.clip(df_clean["distance_km"].values / max(df_clean["distance_km"].max(), 1e-9), 0, 1)
+        dqn1_prob = np.clip(dqn0_prob_arr + 0.06*(tightness - 1.0) + 0.05*(1.0 - traffic) + rng.normal(0, 0.01, size=len(df_clean)), 0, 1)
+        dqn2_prob = np.clip(dqn1_prob + (y_true_arr - 0.5)*0.05, 0, 1)
+
+        st.info("Cleared. The tab will fall back to proxy scores.")
+
+    # Ensure all arrays have the same base length
+    L = len(y_true_arr)
+    a_star_prob_arr = a_star_prob_arr[:L]
+    if dqn0_prob_arr is not None: dqn0_prob_arr = dqn0_prob_arr[:L]
+    if not using_real:
+        dqn1_prob = dqn1_prob[:L]
+        dqn2_prob = dqn2_prob[:L]
 
         # 3) Consistent test split (robust to tiny/imbalanced data)
     idx = np.arange(len(y_true_arr))
