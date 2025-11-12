@@ -1376,6 +1376,7 @@ with T4:
                             "episodes": int(eval_eps),
                             "rl_mean_reward": float(res.get("mean_reward", 0.0)),
                             "weighted_length": rl_weight,
+                            "rl_weighted_length": rl_weight,
                         }
         
                         # --- build metrics so Results tab can show RL length + efficiency ---
