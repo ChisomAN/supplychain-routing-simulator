@@ -779,12 +779,22 @@ def render_advanced_analysis_tab(
                     temp=0.08,
                     rng_seed=19
                 )
-                st.success(f"Collected {len(out['y_true'])} labeled samples.")
-                aa_eval = ctx.get("aa_eval")
-                y_true_arr = aa_eval["y_true"]
-                a_star_prob_arr = aa_eval["a_star_prob"]
-                dqn0_prob_arr = aa_eval.get("dqn_prob", None)
-                using_real = True
+                n_lab = len(out["y_true"])
+    
+                if n_lab == 0:
+                    # No usable pairs → keep proxy scores, don't flip into "using_real" mode
+                    st.warning(
+                        "Real evaluation sample had **0 usable pairs** "
+                        "(no valid paths/scores). Keeping proxy scores instead."
+                    )
+                    using_real = False
+                else:
+                    st.success(f"Collected {n_lab} labeled samples.")
+                    aa_eval = ctx.get("aa_eval")
+                    y_true_arr = aa_eval["y_true"]
+                    a_star_prob_arr = aa_eval["a_star_prob"]
+                    dqn0_prob_arr = aa_eval.get("dqn_prob", None)
+                    using_real = True
             except Exception as e:
                 st.error(f"Could not collect real samples: {e}")
     with cols_btn[1]:
