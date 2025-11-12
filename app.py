@@ -622,20 +622,37 @@ def aa_collect_real_scores(ctx: dict, k_pairs=200, sla_min=90, weight="travel_ti
     a_star_prob = _aa_sigmoid(sla - a_times, temp=temp)
     dqn_prob = _aa_sigmoid(sla - d_times, temp=temp) if d_times is not None else None
 
-    # Clean NaNs
-    valid = np.isfinite(a_star_prob) & np.isfinite(y_true)
-    if dqn_prob is not None:
-        valid = valid & np.isfinite(dqn_prob)
-
-    out = {
-        "pairs": [pairs[i] for i, ok in enumerate(valid) if ok],
-        "y_true": y_true[valid].astype(int),
-        "a_star_prob": a_star_prob[valid],
-        "dqn_prob": dqn_prob[valid] if dqn_prob is not None else None,
-        "sla_min": sla_min,
-        "weight": weight,
-        "temp": temp
-    }
+        # Clean NaNs (be forgiving so we don't end up with 0 samples)
+        base_valid = np.isfinite(a_star_prob) & np.isfinite(y_true)
+    
+        if dqn_prob is not None:
+            dqn_valid = np.isfinite(dqn_prob)
+    
+            if dqn_valid.any():
+                # Use only rows where *both* A* and DQN are finite
+                valid = base_valid & dqn_valid
+            else:
+                # RL side is all NaNs → fall back to baseline-only evaluation
+                dqn_prob = None
+                valid = base_valid
+        else:
+            # No RL probs at all → baseline-only, but still keep labels
+            valid = base_valid
+    
+        # As a last safety net, if somehow everything is bad, keep at least baseline where possible
+        if not valid.any() and base_valid.any():
+            valid = base_valid
+            dqn_prob = None
+    
+        out = {
+            "pairs": [pairs[i] for i, ok in enumerate(valid) if ok],
+            "y_true": y_true[valid].astype(int),
+            "a_star_prob": a_star_prob[valid],
+            "dqn_prob": dqn_prob[valid] if dqn_prob is not None else None,
+            "sla_min": sla_min,
+            "weight": weight,
+            "temp": temp,
+        }
     ctx["aa_eval"] = out
     return out
 
