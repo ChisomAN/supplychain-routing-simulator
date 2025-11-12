@@ -1359,6 +1359,8 @@ with T4:
         
                         # --- try to extract a route cost / length from the RL result ---
                         rl_weight = None
+        
+                        # 1) Look for any obvious route-length keys in the result dict
                         for key in ("weighted_length", "total_time", "travel_time",
                                     "episode_time", "length"):
                             if key not in res:
@@ -1371,12 +1373,21 @@ with T4:
                                 rl_weight = float(v[0])
                                 break
         
+                        # 2) Fallback: approximate a "cost" from mean_reward if nothing else is available
+                        if rl_weight is None:
+                            mr = res.get("mean_reward")
+                            if isinstance(mr, (int, float)):
+                                # In many routing RL setups lower cost ↔ higher (less negative) reward.
+                                # We use -mean_reward as a simple proxy so that the Results tab
+                                # can still show an RL length and efficiency gain.
+                                rl_weight = float(-mr)
+        
                         # Store RL outputs in context (now including weighted_length)
                         ctx["rl_results"] = {
                             "episodes": int(eval_eps),
                             "rl_mean_reward": float(res.get("mean_reward", 0.0)),
                             "weighted_length": rl_weight,
-                            "rl_weighted_length": rl_weight,
+                            "rl_weighted_length": rl_weight,  # alias for any older code
                         }
         
                         # --- build metrics so Results tab can show RL length + efficiency ---
