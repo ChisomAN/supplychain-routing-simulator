@@ -1380,7 +1380,9 @@ with T4:
                                 # In many routing RL setups lower cost ↔ higher (less negative) reward.
                                 # We use -mean_reward as a simple proxy so that the Results tab
                                 # can still show an RL length and efficiency gain.
-                                rl_weight = float(-mr)
+                                # Rescale the reward so it's in the same ballpark as the A* path length.
+                                scale = 100.0
+                                rl_weight = float(-mr) / scale
         
                         # Store RL outputs in context (now including weighted_length)
                         ctx["rl_results"] = {
@@ -1460,9 +1462,15 @@ with T5:
     
         c1, c2, c3 = st.columns(3)
         with c1:
-            st.metric("Baseline Weighted Length", "-" if b_len is None else b_len)
+            st.metric(
+                "Baseline Weighted Length",
+                "-" if b_len is None else round(b_len, 2)
+            )
         with c2:
-            st.metric("RL Weighted Length", "-" if r_len is None else r_len)
+            st.metric(
+                "RL Weighted Length",
+                "-" if r_len is None else round(r_len, 2)
+            )
         with c3:
             if isinstance(b_len, (int, float)) and isinstance(r_len, (int, float)) and b_len > 0:
                 st.metric("Efficiency Gain", f"{round(100*(b_len - r_len)/b_len, 2)}%")
