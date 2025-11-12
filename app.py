@@ -1347,27 +1347,67 @@ with T4:
                 try:
                     from models.env import RoutingEnv
                     from models.dqn_agent import infer_dqn
-
+        
                     if not ctx.get("rl_model_path"):
                         st.warning("Train a model first.")
                     else:
                         eval_env = RoutingEnv(ctx["G"])
                         with st.spinner("Running inference..."):
-                            res = infer_dqn(ctx["rl_model_path"], eval_env, episodes=int(eval_eps))
-                        # Normalize to what Results tab expects
+                            res = infer_dqn(
+                                ctx["rl_model_path"], eval_env, episodes=int(eval_eps)
+                            )
+        
+                        # --- try to extract a route cost / length from the RL result ---
+                        rl_weight = None
+                        for key in ("weighted_length", "total_time", "travel_time",
+                                    "episode_time", "length"):
+                            if key not in res:
+                                continue
+                            v = res[key]
+                            if isinstance(v, (int, float)):
+                                rl_weight = float(v)
+                                break
+                            if isinstance(v, (list, tuple)) and v and isinstance(v[0], (int, float)):
+                                rl_weight = float(v[0])
+                                break
+        
+                        # Store RL outputs in context (now including weighted_length)
                         ctx["rl_results"] = {
                             "episodes": int(eval_eps),
                             "rl_mean_reward": float(res.get("mean_reward", 0.0)),
+                            "weighted_length": rl_weight,
                         }
-                        try:
-                            ctx["metrics"] = evaluate_kpis(ctx.get("baseline"), ctx.get("rl_results"))
+        
+                        # --- build metrics so Results tab can show RL length + efficiency ---
+                        base = ctx.get("baseline")
+                        if base and "weighted_length" in base and isinstance(rl_weight, (int, float)):
+                            b_len = float(base["weighted_length"])
+                            r_len = float(rl_weight)
+                            eff = 100.0 * (b_len - r_len) / b_len if b_len > 0 else None
+        
+                            ctx["metrics"] = {
+                                "Baseline": {"weighted_length": b_len},
+                                "RL": {
+                                    "weighted_length": r_len,
+                                    "efficiency_gain_pct": eff,
+                                },
+                            }
                             st.success("Metrics updated from RL inference.")
-                        except Exception as e:
-                            st.warning(f"Metrics update skipped: {e}")
+                        else:
+                            # Fall back to the original helper if we can't compute both lengths yet
+                            try:
+                                ctx["metrics"] = evaluate_kpis(
+                                    ctx.get("baseline"), ctx.get("rl_results")
+                                )
+                                st.success("Metrics updated from RL inference.")
+                            except Exception as e:
+                                st.warning(f"Metrics update skipped: {e}")
+        
                         log_run("infer_dqn", ctx["rl_results"])
                         st.write(ctx["rl_results"])
                 except Exception as e:
                     st.error(f"RL inference unavailable: {e}")
+
 
 # ---------------------------- Results ----------------------------
 with T5:
