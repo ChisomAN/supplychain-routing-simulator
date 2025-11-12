@@ -144,6 +144,13 @@ def _ensure_chartable_kpis(metrics: Dict[str, Any]) -> Dict[str, Any]:
     # flat dict (Baseline only) - keep as-is
     return metrics
 
+def _get_any(d: dict, *keys):
+    for k in keys:
+        v = d.get(k)
+        if isinstance(v, (int, float)):
+            return float(v)
+    return None
+
 def compute_high_level_summary(ctx: dict) -> Dict[str, Any]:
     """Derive executive-level KPIs from current context (safe defaults)."""
     edges = ctx.get("edges_df")
@@ -1391,19 +1398,22 @@ with T5:
     if not metrics:
         st.info("Run a model (A* and/or RL) to view results.")
     else:
-        # headline KPIs
-        base = metrics.get("Baseline", {})
-        rl_m = metrics.get("RL", {})
-
+        base = metrics.get("Baseline", {}) or {}
+        rl_m = metrics.get("RL", {}) or {}
+    
+        # accept either the old names (baseline_weighted_length / rl_weighted_length)
+        # or the canonical 'weighted_length'
+        b_len = _get_any(base, "weighted_length", "baseline_weighted_length")
+        r_len = _get_any(rl_m, "weighted_length", "rl_weighted_length")
+    
         c1, c2, c3 = st.columns(3)
         with c1:
-            st.metric("Baseline Weighted Length", f"{base.get('weighted_length', '-')}")
+            st.metric("Baseline Weighted Length", "-" if b_len is None else b_len)
         with c2:
-            st.metric("RL Weighted Length", f"{rl_m.get('weighted_length', '-')}")
+            st.metric("RL Weighted Length", "-" if r_len is None else r_len)
         with c3:
-            b = base.get("weighted_length"); r = rl_m.get("weighted_length")
-            if isinstance(b, (int, float)) and isinstance(r, (int, float)) and b > 0:
-                st.metric("Efficiency Gain", f"{round(100*(b-r)/b, 2)}%")
+            if isinstance(b_len, (int, float)) and isinstance(r_len, (int, float)) and b_len > 0:
+                st.metric("Efficiency Gain", f"{round(100*(b_len - r_len)/b_len, 2)}%")
             else:
                 st.metric("Efficiency Gain", "-")
 
