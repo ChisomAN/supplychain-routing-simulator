@@ -5,7 +5,6 @@ import os
 import json
 
 
-# Where we’ll store the reward history so Streamlit can read it
 LOG_DIR = os.path.join("artifacts", "logs")
 os.makedirs(LOG_DIR, exist_ok=True)
 REWARD_LOG_PATH = os.path.join(LOG_DIR, "dqn_reward_history.json")
@@ -32,8 +31,10 @@ class RewardLoggerCallback(BaseCallback):
         super().__init__(verbose)
         self.buffer = buffer
 
+    def _on_step(self) -> bool:
+        return True
+
     def _on_rollout_end(self) -> bool:
-        # ep_info_buffer is a deque of dicts with key "r" for episode reward
         if len(self.model.ep_info_buffer) > 0:
             mean_r = float(
                 sum(info["r"] for info in self.model.ep_info_buffer)
