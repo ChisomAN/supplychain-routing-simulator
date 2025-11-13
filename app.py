@@ -331,6 +331,45 @@ def _safe_read(path: str, default_text: str = "File not found."):
     except Exception:
         return default_text
 
+# --- RL reward convergence plotting helper ---
+REWARD_LOG_PATH = os.path.join(LOG_DIR, "dqn_reward_history.json")
+
+def show_reward_convergence():
+    """Render a reward-vs-timesteps line chart if training history exists."""
+    if not os.path.exists(REWARD_LOG_PATH):
+        st.info("No RL reward history found yet. Train the DQN to generate it.")
+        return
+
+    try:
+        with open(REWARD_LOG_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        if not data:
+            st.info("Reward history file is empty. Try re-training the DQN.")
+            return
+
+        df = pd.DataFrame(data)
+
+        # Defensive checks
+        if "timesteps" not in df.columns or "mean_reward" not in df.columns:
+            st.warning("Reward log is missing expected columns 'timesteps' or 'mean_reward'.")
+            st.json(data)
+            return
+
+        df = df.sort_values("timesteps")
+
+        fig, ax = plt.subplots()
+        ax.plot(df["timesteps"], df["mean_reward"], marker="o")
+        ax.set_xlabel("Timesteps")
+        ax.set_ylabel("Mean episode reward")
+        ax.set_title("DQN Reward Convergence")
+        ax.grid(True, alpha=0.3)
+
+        st.pyplot(fig, use_container_width=True)
+
+    except Exception as e:
+        st.error(f"Could not render reward convergence plot: {e}")
+
 st.markdown("""
 <style>
 /* content width + spacing */
@@ -1449,6 +1488,8 @@ with T4:
                 except Exception as e:
                     st.error(f"RL inference unavailable: {e}")
 
+        with st.expander("RL training diagnostics (reward convergence)"):
+            show_reward_convergence()
 
 # ---------------------------- Results ----------------------------
 with T5:
