@@ -1,6 +1,14 @@
 from stable_baselines3 import DQN
-from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.callbacks import BaseCallback, CallbackList
 import tempfile
+import os
+import json
+
+
+# Where we’ll store the reward history so Streamlit can read it
+LOG_DIR = os.path.join("artifacts", "logs")
+os.makedirs(LOG_DIR, exist_ok=True)
+REWARD_LOG_PATH = os.path.join(LOG_DIR, "dqn_reward_history.json")
 
 
 class SaveEveryCallback(BaseCallback):
@@ -15,9 +23,40 @@ class SaveEveryCallback(BaseCallback):
         return True
 
 
-def train_dqn(env, total_timesteps: int = 2000, learning_rate: float = 5e-4,
-              batch_size: int = 64, gamma: float = 0.99, exploration_fraction: float = 0.1,
-              save_path: str | None = None) -> str:
+class RewardLoggerCallback(BaseCallback):
+    """
+    Logs (timesteps, mean_episode_reward) at the end of each rollout.
+    """
+
+    def __init__(self, buffer, verbose=0):
+        super().__init__(verbose)
+        self.buffer = buffer
+
+    def _on_rollout_end(self) -> bool:
+        # ep_info_buffer is a deque of dicts with key "r" for episode reward
+        if len(self.model.ep_info_buffer) > 0:
+            mean_r = float(
+                sum(info["r"] for info in self.model.ep_info_buffer)
+                / len(self.model.ep_info_buffer)
+            )
+            self.buffer.append((int(self.num_timesteps), mean_r))
+        return True
+
+
+def train_dqn(
+    env,
+    total_timesteps: int = 2000,
+    learning_rate: float = 5e-4,
+    batch_size: int = 64,
+    gamma: float = 0.99,
+    exploration_fraction: float = 0.1,
+    save_path: str | None = None,
+) -> str:
+    """
+    Train a DQN agent and:
+      - save the model (path returned)
+      - write reward history to artifacts/logs/dqn_reward_history.json
+    """
     model = DQN(
         policy="MlpPolicy",
         env=env,
@@ -27,10 +66,31 @@ def train_dqn(env, total_timesteps: int = 2000, learning_rate: float = 5e-4,
         exploration_fraction=exploration_fraction,
         verbose=0,
     )
+
     out_path = save_path or tempfile.mktemp(suffix="_dqn_model.zip")
-    cb = SaveEveryCallback(save_freq=500, save_path=out_path)
-    model.learn(total_timesteps=total_timesteps, callback=cb)
+
+    # buffer to collect (timesteps, mean_reward) during learning
+    reward_history = []
+
+    callbacks = CallbackList([
+        SaveEveryCallback(save_freq=500, save_path=out_path),
+        RewardLoggerCallback(reward_history),
+    ])
+
+    model.learn(total_timesteps=total_timesteps, callback=callbacks)
     model.save(out_path)
+
+    # persist reward history for the Streamlit app
+    try:
+        with open(REWARD_LOG_PATH, "w", encoding="utf-8") as f:
+            json.dump(
+                [{"timesteps": int(t), "mean_reward": float(r)} for t, r in reward_history],
+                f,
+            )
+    except Exception:
+        # fail silently if logging can't be written; training still succeeded
+        pass
+
     return out_path
 
 
